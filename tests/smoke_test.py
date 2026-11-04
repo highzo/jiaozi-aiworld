@@ -24,6 +24,14 @@ BASE = os.environ.get("JIAOZI_URL", "http://127.0.0.1:8787").rstrip("/")
 U = urllib.parse.urlparse(BASE)
 HOST, PORT = U.hostname or "127.0.0.1", U.port or 8787
 MOCK_PORT = int(os.environ.get("MOCK_PORT", "8799"))
+# 假模型服务监听地址。跨机器/跨 WSL 测试时设为 0.0.0.0，否则被测服务连不进来。
+MOCK_BIND = os.environ.get("MOCK_BIND", "127.0.0.1")
+# 告诉被测服务该用哪个地址来连假模型。默认本机回环；
+# 测 WSL / 局域网设备时传 http://<这台机器的可达IP>:8799/v1
+MOCK_URL = os.environ.get("JIAOZI_MOCK_URL", "http://127.0.0.1:%d/v1" % MOCK_PORT)
+# 被测服务的 token。默认从本机 ~/.jiaozi/config.json 读；
+# 测远端时本机配置里的 token 对不上，必须显式传。
+TOKEN_ENV = os.environ.get("JIAOZI_TOKEN", "")
 
 PASS, FAIL = [], []
 
@@ -142,7 +150,7 @@ class MockLLM(BaseHTTPRequestHandler):
 
 
 def start_mock():
-    srv = ThreadingHTTPServer(("127.0.0.1", MOCK_PORT), MockLLM)
+    srv = ThreadingHTTPServer((MOCK_BIND, MOCK_PORT), MockLLM)
     srv.daemon_threads = True
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv
@@ -279,7 +287,7 @@ def test_agent():
     old = cfg["data"]["llm"]
     old_agent = cfg["data"]["agent"]
     st, j = req("POST", "/api/config", {
-        "llm": {"base_url": f"http://127.0.0.1:{MOCK_PORT}/v1", "model": "mock-coder",
+        "llm": {"base_url": MOCK_URL, "model": "mock-coder",
                 "native_tools": True, "stream": True, "max_tokens": 512},
         "agent": {"approval": "auto", "max_steps": 6},
     })
@@ -338,7 +346,7 @@ def test_device():
     print("\n[6] 设备 / 机器人接口")
     st, j = req("GET", "/api/device/health")
     ok("设备健康检查", st == 200 and j["data"]["brain"] == "online", j.get("error"))
-    req("POST", "/api/config", {"llm": {"base_url": f"http://127.0.0.1:{MOCK_PORT}/v1",
+    req("POST", "/api/config", {"llm": {"base_url": MOCK_URL,
                                         "model": "mock-coder", "native_tools": True,
                                         "stream": True},
                                 "agent": {"approval": "auto"}})
@@ -371,7 +379,7 @@ def test_image():
 
     req("POST", "/api/config", {"image": {
         "enabled": True,
-        "base_url": f"http://127.0.0.1:{MOCK_PORT}/v1",
+        "base_url": MOCK_URL,
         "model": "mock-image",
         "api_key": "",
         "save_dir": test_dir,
@@ -383,10 +391,13 @@ def test_image():
         ok("生成接口可用", st == 200 and j.get("ok"), j.get("error"))
         ok("按要求生成 2 张", len(files) == 2, files)
 
+        # 用服务端自己的视角判断落盘：测 WSL / 远端设备时，图片在对方磁盘上，
+        # 本机的 os.path 根本 stat 不到（会全返回 -1），那测的就不是这回事了。
         sizes = []
         for f in files:
-            p = os.path.expanduser(f)
-            sizes.append(os.path.getsize(p) if os.path.exists(p) else -1)
+            st2, j2 = req("GET", "/api/fs/stat?path=" + urllib.parse.quote(f))
+            size = ((j2.get("data") or {}).get("size") if st2 == 200 else -1)
+            sizes.append(size if size is not None else -1)
         ok("图片真的落到磁盘上", bool(sizes) and all(s > 0 for s in sizes), sizes)
 
         if files:
@@ -422,14 +433,15 @@ def test_auth():
     服务端种 cookie，之后 fetch 与 EventSource 才能通。
     """
     print("\n[7] 鉴权（模拟手机远道访问）")
-    tok = ""
-    try:
-        import pathlib
-        base = pathlib.Path(os.environ.get("JIAOZI_HOME") or (pathlib.Path.home() / ".jiaozi"))
-        tok = json.loads((base / "config.json").read_text(encoding="utf-8"))["auth"]["token"]
-    except Exception as e:
-        print(f"  跳过：读不到本地 token（{e}）")
-        return
+    tok = TOKEN_ENV
+    if not tok:
+        try:
+            import pathlib
+            base = pathlib.Path(os.environ.get("JIAOZI_HOME") or (pathlib.Path.home() / ".jiaozi"))
+            tok = json.loads((base / "config.json").read_text(encoding="utf-8"))["auth"]["token"]
+        except Exception as e:
+            print(f"  跳过：读不到本地 token（{e}）")
+            return
     if not tok:
         print("  跳过：未设置 token")
         return

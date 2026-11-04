@@ -259,7 +259,9 @@ def main() -> int:
             if "JIAOZI-UI-OK" in txt and txt.count("JIAOZI-UI-OK") >= 2:
                 break
         ok("命令已执行并回显", "JIAOZI-UI-OK" in txt, txt[-200:])
-        ok("终端有提示符输出", "bash" in txt.lower() or "$" in txt or ">" in txt, txt[:120])
+        # root 的提示符是 #，普通用户是 $，Windows PowerShell 是 >，三种都要认
+        ok("终端有提示符输出",
+           "bash" in txt.lower() or "$" in txt or ">" in txt or "#" in txt, txt[:120])
         shot("03-terminal.png")
 
         print("\n[UI-4] 设置与监视器")

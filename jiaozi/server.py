@@ -149,15 +149,8 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
     # ---------------- 鉴权 ----------------
-    def authed(self) -> bool:
-        cfg = config.load()
-        token = cfg["auth"]["token"]
-        if not token:
-            return True
-        if cfg["server"].get("allow_localhost", True):
-            host = (self.client_address or ["", 0])[0]
-            if host in ("127.0.0.1", "::1", "localhost"):
-                return True
+    def _given_token(self) -> str:
+        """请求里显式携带的 token：头 > cookie > 查询参数。"""
         given = self.headers.get("X-Jiaozi-Token") or ""
         if not given:
             m = re.search(r'(?:^|;\s*)jz_token=([^;]+)', self.headers.get("Cookie") or "")
@@ -166,7 +159,34 @@ class Handler(BaseHTTPRequestHandler):
         if not given:
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             given = (q.get("token") or [""])[0]
-        return given == token
+        return given
+
+    def is_loopback(self) -> bool:
+        """请求是否来自本机。
+
+        Linux 下双栈监听时 client_address 可能是 ::ffff:127.0.0.1，
+        直接比对 '127.0.0.1' 会漏判，导致本机也被要求 token。
+        """
+        host = ((self.client_address or ("", 0))[0] or "").strip()
+        if host.startswith("::ffff:"):
+            host = host[len("::ffff:"):]
+        return host in ("127.0.0.1", "::1", "localhost", "")
+
+    def by_token(self) -> bool:
+        """是否靠真实 token 通过（不算 localhost 豁免）。"""
+        token = config.load()["auth"]["token"]
+        if not token:
+            return True
+        return self._given_token() == token
+
+    def authed(self) -> bool:
+        cfg = config.load()
+        token = cfg["auth"]["token"]
+        if not token:
+            return True
+        if cfg["server"].get("allow_localhost", True) and self.is_loopback():
+            return True
+        return self._given_token() == token
 
     # ---------------- 分发 ----------------
     def do_OPTIONS(self) -> None:
@@ -315,6 +335,17 @@ class Handler(BaseHTTPRequestHandler):
                 d.pop("api_key", None)
         if clean.get("ui", {}).get("accent") and not re.match(r"^#[0-9a-fA-F]{6}$", clean["ui"]["accent"]):
             clean["ui"].pop("accent", None)
+        # 关闭 localhost 免 token 必须自带有效 token：否则本机随手一个匿名请求
+        # 就能把这扇门关上，把调用方和之后所有本机请求一起锁在门外（连恢复都要 token）。
+        srv = clean.get("server")
+        if isinstance(srv, dict) and "allow_localhost" in srv:
+            if not srv["allow_localhost"] and not self.by_token():
+                self.send_json({
+                    "ok": False,
+                    "error": "关闭 localhost 免 token 必须携带有效 token（X-Jiaozi-Token 头或 ?token=），"
+                             "否则会把自己锁在门外",
+                }, 403)
+                return
         cfg = config.save(clean)
         BUS.publish("config", {"changed": list(clean.keys())})
         self.send_json({"ok": True, "data": config.public_view(cfg)})

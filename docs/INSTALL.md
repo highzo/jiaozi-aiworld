@@ -164,6 +164,54 @@ New-NetFirewallRule -DisplayName "JiaoziAI 8787" -Direction Inbound `
 **为什么 WSL 比原生 Windows 好**：终端拿到的是真 PTY，`top`、`vim`、`htop` 全部正常，
 和安卓/树莓派上的行为完全一致——也就是你能在 Windows 上把要给机器人的东西先调通。
 
+### 实测记录（Ubuntu 24.04.5 LTS / WSL2，已验证）
+
+这个组合是**真跑通过**的，不是推测：服务整个跑在 Linux VM 里，Windows 侧用浏览器访问，
+冒烟 57 项 + 界面 40 项 + VT 24 项全绿。环境实测值：
+
+| 项 | 值 |
+|---|---|
+| 发行版 | Ubuntu 24.04.5 LTS，`ext4.vhdx` 约 1.3 GB |
+| VM | WSL2，`Linux 5.10.16.3-microsoft-standard-WSL2`，x86_64 |
+| Python | 系统自带 3.12.3，**零第三方依赖，不用 pip install** |
+| 宿主网卡 | `vEthernet (WSL)` = `172.28.128.1`（NAT 模式下的主机地址） |
+| 转发 | 8787 的监听者是 `wslhost.exe`，即 WSL2 自动做 localhost 转发 |
+
+**在 WSL 里跑起来**：
+
+```bash
+cd ~/jiaozi-aiworld
+python3 -m jiaozi --host 0.0.0.0 --port 8787
+```
+
+然后 Windows 侧直接开 `http://127.0.0.1:8787/`，不需要任何端口转发。
+
+**从 Windows 侧对 WSL 实例跑测试**（跨机器验证，三个变量必须显式给）：
+
+```bash
+JIAOZI_URL=http://127.0.0.1:8787 \
+MOCK_BIND=0.0.0.0 \
+JIAOZI_MOCK_URL=http://172.28.128.1:8799/v1 \
+JIAOZI_TOKEN=<WSL 里 ~/.jiaozi/config.json 的 auth.token> \
+python tests/smoke_test.py
+```
+
+三个变量各自解决一个错位，缺一个就会有一片断言假红：
+
+- `JIAOZI_TOKEN` —— 否则读到的是 Windows 的 token，服务端不认
+- `MOCK_BIND=0.0.0.0` —— 否则假模型只监听 Windows 回环，Linux 侧连不进来
+- `JIAOZI_MOCK_URL` —— 必须给 Linux 视角能到达的主机地址（NAT 模式下是 `172.28.128.1`）
+
+想验证连通性，最省事的办法是让 Linux 里的服务自己去连一次：
+`POST /api/llm/test` 带上 `{"base_url": "http://172.28.128.1:8799/v1"}`，
+能返回模型列表就说明这条路通了。
+
+**文件管理器只看得到 `/root`**，这是沙箱的默认根目录，不是 bug。
+想让它能进 `/mnt/c`（就是你的 Windows C 盘）或者整盘，在
+`设置 → 文件 → 根目录` 里加一条 `/mnt` 或 `/` 即可——加几个就多看到几个入口，
+沙箱边界也随之放宽，自己按需要来。
+
+
 ---
 
 ## 反向代理（可选）
