@@ -89,6 +89,29 @@
     scrollDown();
   }
 
+  /* 从 image_gen 的工具结果里抠出图片路径，好在对话里直接给缩略图。
+     让人类"看见"AI 画了什么，而不是读一段 JSON。 */
+  function toolImages(ev) {
+    if (ev.name !== 'image_gen' || ev.status !== 'ok' || !ev.result) return [];
+    try {
+      const j = JSON.parse(ev.result);
+      if (j && Array.isArray(j.files)) return j.files.filter(Boolean).slice(0, 6);
+    } catch (e) {}
+    return [];
+  }
+
+  function renderToolImages(box, paths) {
+    const one = paths.length === 1;
+    box.innerHTML = '<div class="sc-imgs' + (one ? ' one' : '') + '">' + paths.map(function (p) {
+      return '<button class="sc-img" title="' + esc(p) + '">' +
+        '<img loading="lazy" src="' + esc(JZ.api.raw('/api/fs/raw', { path: p })) + '" alt="">' +
+        '</button>';
+    }).join('') + '</div>';
+    box.querySelectorAll('.sc-img').forEach(function (b) {
+      b.onclick = function () { JZ.WM.open('viewer', { path: b.title }); };
+    });
+  }
+
   function toolCard(ev) {
     closeBubble();
     const id = 'tc-' + (ev.id || Math.random().toString(36).slice(2));
@@ -108,7 +131,13 @@
     if (ev.status === 'ok') {
       card.className = 'step-card ok';
       card.querySelector('.sc-st').textContent = '完成';
-      card.querySelector('.sc-body').textContent = (ev.result || '(无输出)').slice(0, 4000);
+      const imgs = toolImages(ev);
+      if (imgs.length) {
+        card.classList.add('open', 'has-img');
+        renderToolImages(card.querySelector('.sc-body'), imgs);
+      } else {
+        card.querySelector('.sc-body').textContent = (ev.result || '(无输出)').slice(0, 4000);
+      }
     } else if (ev.status === 'denied') {
       card.className = 'step-card denied';
       card.querySelector('.sc-st').textContent = '已拒绝';

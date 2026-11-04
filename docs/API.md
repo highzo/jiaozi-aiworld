@@ -163,6 +163,8 @@ with requests.get("http://127.0.0.1:8787/api/events", stream=True) as r:
 | GET | `/api/agent/history?sid=main` | 历史消息 |
 | GET | `/api/llm/models` | 模型列表（透传上游） |
 | POST | `/api/llm/test` | 推送配置做连通性 + 推理测试 |
+| POST | `/api/image/generate` | `{"prompt":"...","n":1,"size":"1024x1024"}` → 生成并落盘 |
+| POST | `/api/image/test` | 用 512×512 小图做一次真实连通性验证 |
 
 `/api/agent/chat` 的事件序列：
 
@@ -184,6 +186,36 @@ with requests.get("http://127.0.0.1:8787/api/events", stream=True) as r:
 curl -X POST localhost:8787/api/agent/approve \
   -H 'Content-Type: application/json' -d '{"id":"ab12","ok":true}'
 ```
+
+---
+
+## 图像生成
+
+```bash
+curl -X POST localhost:8787/api/image/generate \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"一位穿旗袍的女子站在江南园林里，真实摄影","n":2}'
+```
+
+```json
+{"ok": true, "data": {
+  "files": ["/home/pi/Pictures/JiaoziAI/20261104-144823-一位穿旗袍的女子.png",
+            "/home/pi/Pictures/JiaoziAI/20261104-144823-一位穿旗袍的女子-2.png"],
+  "model": "agnes-image-2.5-flash", "size": "1024x1024",
+  "prompt": "...", "elapsed": 73.4
+}}
+```
+
+要点：
+
+- **返回的是磁盘路径，不是临时 URL。** 图片真的写进了 `image.save_dir`，
+  可以直接用 `/api/fs/raw?path=...` 读、用 `ui_open` 打开、或者被别的程序拿去用。
+- 一次调用只描述**一个画面**。要不同场景就调多次——在一条 prompt 里写
+  "第一张…第二张…"，模型会把它们挤进同一张画布里（实测踩过）。
+- `n` 是**同一画面的变体数**，实现上是循环调用上游（兼容性最好），所以耗时按倍数增加。
+- 上游返回 `b64_json` 或 `url` 都能吃；`url` 会被下载下来（上限 24MB）。
+- `image.enabled=false` 时接口直接 400，不会偷偷发请求——这一点有测试守着。
+- `base_url` / `api_key` 留空则回落到 `llm` 的配置。
 
 ---
 

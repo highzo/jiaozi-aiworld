@@ -66,6 +66,17 @@ DEFAULTS: dict = {
         #: 关闭流式可降低部分老设备的兼容问题
         "stream": True,
     },
+    "image": {
+        #: 文生图。留空 base_url/api_key 就复用 llm 的（Agnes/OpenAI/兼容端点都走同一套 /images/generations）
+        "enabled": True,
+        "base_url": "",
+        "api_key": "",
+        "model": "agnes-image-2.5-flash",
+        "size": "1024x1024",
+        "timeout": 240,
+        #: 出图存哪。必须在 fs.roots 白名单内，否则 AI 生成完自己也打不开
+        "save_dir": "~/Pictures/JiaoziAI",
+    },
     "agent": {
         "max_steps": 12,
         #: always=每次工具调用都要人确认；auto=仅危险操作需确认；never=全自动
@@ -132,12 +143,29 @@ def _write(cfg: dict) -> None:
     tmp.replace(CONFIG_PATH)
 
 
+def _strip_masked(patch: dict) -> dict:
+    """丢掉前端回传的脱敏占位密钥。
+
+    public_view() 把 api_key 变成 ********；如果前端不慎把它原样提交回来，
+    真实密钥就会被星号覆盖，之后所有请求 401。这里做最后一道防线：
+    空值和纯星号一律视为「不修改」。
+    """
+    out = copy.deepcopy(patch or {})
+    for sec in ("llm", "image"):
+        d = out.get(sec)
+        if isinstance(d, dict) and "api_key" in d:
+            v = str(d.get("api_key") or "").strip()
+            if not v or set(v) == {"*"}:
+                d.pop("api_key", None)
+    return out
+
+
 def save(patch: dict) -> dict:
     """局部更新配置并立即生效。"""
     global _cache
     with _lock:
         cur = load()
-        cfg = _deep_merge(cur, patch)
+        cfg = _deep_merge(cur, _strip_masked(patch))
         _write(cfg)
         _cache = cfg
         return cfg
@@ -151,6 +179,9 @@ def public_view(cfg: dict | None = None) -> dict:
     key = cfg["llm"].get("api_key") or ""
     cfg["llm"]["api_key_set"] = bool(key)
     cfg["llm"]["api_key"] = ("*" * 8) if key else ""
+    ikey = cfg["image"].get("api_key") or ""
+    cfg["image"]["api_key_set"] = bool(ikey)
+    cfg["image"]["api_key"] = ("*" * 8) if ikey else ""
     cfg["_meta"] = {
         "version": VERSION,
         "name": APP_NAME,

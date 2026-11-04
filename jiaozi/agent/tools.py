@@ -83,6 +83,13 @@ TOOL_SPECS: list[dict] = [
             "title": _p("title", "string", "标题"),
             "body": _p("body", "string", "正文")}, "required": ["title"]}}},
     {"type": "function", "function": {
+        "name": "image_gen", "description": "用文生图模型画图，把结果保存成图片文件。想让人「看到」任何视觉内容时用它（插画、头像、海报、示意图、产品图）。中文提示词可直接用，描述越具体越好：主体、构图、光线、风格、色彩。",
+        "parameters": {"type": "object", "properties": {
+            "prompt": _p("prompt", "string", "画面描述，中文即可。只描述一个画面，不要写「第一张…第二张…」"),
+            "n": _p("n", "integer", "同一个画面的变体数量，1-4，默认 1。要不同场景请分多次调用", False),
+            "size": _p("size", "string", "尺寸如 1024x1024 / 1024x1536，留空用默认", False)},
+            "required": ["prompt"]}}},
+    {"type": "function", "function": {
         "name": "web_fetch", "description": "抓取网页并返回纯文本（需要设备联网）。",
         "parameters": {"type": "object", "properties": {
             "url": _p("url", "string", "http/https 地址")}, "required": ["url"]}}},
@@ -180,6 +187,22 @@ def dispatch(name: str, args: dict, ctx: dict | None = None) -> str:
         if name == "ui_notify":
             BUS.notify(args.get("title") or "AI", args.get("body") or "")
             return _json({"ok": True})
+
+        if name == "image_gen":
+            from . import imagegen
+            try:
+                r = imagegen.generate(
+                    args.get("prompt") or "", int(args.get("n") or 1),
+                    args.get("size") or "", cfg=cfg)
+            except imagegen.ImageError as e:
+                msg = str(e)
+                if e.raw:
+                    msg += f"\n接口原文: {e.raw[:300]}"
+                return f"生成失败：{msg}\n（提示：到「设置 → 图像」检查接口地址 / 模型 / API Key）"
+            for f in r["files"]:
+                BUS.publish("fs_change", {"path": f, "action": "write"})
+            BUS.notify("图片已生成", f"{len(r['files'])} 张，用时 {r['elapsed']}s")
+            return _json({"ok": True, **r})
 
         if name == "web_fetch":
             url = args["url"]

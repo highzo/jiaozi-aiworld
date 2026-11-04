@@ -120,10 +120,49 @@ python -m jiaozi --open
 
 能跑，但有两条限制：
 1. 终端走**管道**而不是 PTY，没有 job control（提示符是 `bash-5.3$` 而不是完整 PS1），
-   `vim`/`top` 这类交互程序不可用。
+   `vim`/`top` 这类交互程序不可用。界面上会明确标一行黄字说明。
 2. 若装了 Git for Windows，会自动用它的 `bash.exe`；否则退回 `cmd.exe`。
 
+**注意端口独占**：Windows 的 `SO_REUSEADDR` 允许两个进程同时监听同一端口。
+本项目已经显式关掉它（改用 `SO_EXCLUSIVEADDRUSE`），所以重复启动会明确报错，
+而不是让两个实例抢请求。如果看到"端口已被占用"：
+
+```powershell
+Get-NetTCPConnection -LocalPort 8787 -State Listen | Select-Object OwningProcess
+```
+
 生产环境请用 Linux。
+
+## WSL2（在 Windows 里跑完整 Linux）
+
+这是 Windows 上**推荐**的方式：拿到真 PTY、真文件系统、真 systemd（WSL2 已支持）。
+
+```powershell
+# 1. 在管理员 PowerShell 里装 WSL（装完要重启一次）
+wsl --install -d Ubuntu
+
+# 2. 进 Ubuntu
+wsl -d Ubuntu
+
+# 3. 里面就是普通 Linux，照 Linux 那节来
+sudo apt update && sudo apt install -y python3
+git clone <本项目地址> && cd jiaozi-aiworld
+python3 -m jiaozi --host 0.0.0.0 --port 8787
+```
+
+Windows 侧直接开 `http://localhost:8787/` 就能用——WSL2 会把端口自动转发到 localhost。
+手机走局域网访问时，WSL2 的 IP 和 Windows 不同，需要一条端口转发（管理员 PowerShell）：
+
+```powershell
+$wslIp = (wsl hostname -I).Trim().Split(" ")[0]
+netsh interface portproxy add v4tov4 listenport=8787 listenaddress=0.0.0.0 `
+  connectport=8787 connectaddress=$wslIp
+New-NetFirewallRule -DisplayName "JiaoziAI 8787" -Direction Inbound `
+  -LocalPort 8787 -Protocol TCP -Action Allow
+```
+
+**为什么 WSL 比原生 Windows 好**：终端拿到的是真 PTY，`top`、`vim`、`htop` 全部正常，
+和安卓/树莓派上的行为完全一致——也就是你能在 Windows 上把要给机器人的东西先调通。
 
 ---
 

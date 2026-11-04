@@ -304,13 +304,15 @@ class Handler(BaseHTTPRequestHandler):
         body = self.read_json()
         cur = config.load()
         clean: dict = {}
-        allowed = {"server", "fs", "llm", "agent", "ui", "shell", "device"}
+        allowed = {"server", "fs", "llm", "image", "agent", "ui", "shell", "device"}
         for k, v in body.items():
             if k in allowed and isinstance(v, dict):
                 clean[k] = v
-        # 掩码的 api_key 不覆盖真实值
-        if clean.get("llm", {}).get("api_key", "").startswith("****"):
-            clean["llm"].pop("api_key", None)
+        # 掩码的 api_key 不覆盖真实值（config.save 里还有一道同样的防线）
+        for sec in ("llm", "image"):
+            d = clean.get(sec)
+            if isinstance(d, dict) and str(d.get("api_key") or "").startswith("****"):
+                d.pop("api_key", None)
         if clean.get("ui", {}).get("accent") and not re.match(r"^#[0-9a-fA-F]{6}$", clean["ui"]["accent"]):
             clean["ui"].pop("accent", None)
         cfg = config.save(clean)
@@ -546,6 +548,42 @@ class Handler(BaseHTTPRequestHandler):
                 r["reply"] = f"(推理测试失败: {e})"
         self.send_json({"ok": bool(r.get("ok")), "data": r})
 
+    @route("POST", r"/api/image/generate")
+    def api_image_generate(self, q):
+        from .agent import imagegen
+        b = self.read_json()
+        cfg = config.load()
+        probe = json.loads(json.dumps(cfg))
+        for k in ("base_url", "model", "api_key", "size"):
+            if b.get(k):
+                probe["image"][k] = b[k]
+        try:
+            r = imagegen.generate(b.get("prompt") or "", int(b.get("n") or 1),
+                                  b.get("size") or "", cfg=probe)
+        except imagegen.ImageError as e:
+            self.send_json({"ok": False, "error": str(e), "raw": e.raw}, 502)
+            return
+        for f in r["files"]:
+            BUS.publish("fs_change", {"path": f, "action": "write"})
+        self.send_json({"ok": True, "data": r})
+
+    @route("POST", r"/api/image/test")
+    def api_image_test(self, q):
+        from .agent import imagegen
+        b = self.read_json()
+        cfg = config.load()
+        probe = json.loads(json.dumps(cfg))
+        for k in ("base_url", "model", "api_key"):
+            if b.get(k):
+                probe["image"][k] = b[k]
+        try:
+            r = imagegen.generate(b.get("prompt") or "a blue circle on white", n=1,
+                                  size="512x512", cfg=probe)
+        except imagegen.ImageError as e:
+            self.send_json({"ok": False, "error": str(e), "raw": e.raw}, 502)
+            return
+        self.send_json({"ok": True, "data": r})
+
     @route("GET", r"/api/tools")
     def api_tools(self, q):
         self.send_json({"ok": True, "data": T.TOOL_SPECS})
@@ -641,6 +679,18 @@ class Handler(BaseHTTPRequestHandler):
 
 class JiaoziServer(ThreadingHTTPServer):
     daemon_threads = True
+    #: Windows 的 SO_REUSEADDR 语义与 Unix 不同：它允许第二个进程绑定一个
+    #: 已经在监听的端口，于是两个实例会静默瓜分请求——改完代码「没生效」
+    #: 的经典坑。关掉它，只在 Unix 上保留（那边是复用 TIME_WAIT，正常需要）。
+    allow_reuse_address = os.name != "nt"
+
+    def server_bind(self) -> None:
+        if os.name == "nt":
+            try:
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            except (AttributeError, OSError):
+                pass
+        super().server_bind()
 
     def handle_error(self, request, client_address) -> None:
         # 浏览器刷新页面、关闭标签、SSE 断线都会让 socketserver 抛
@@ -657,7 +707,22 @@ def serve(host: str = "", port: int = 0, open_browser: bool = False) -> None:
     cfg = config.load()
     host = host or cfg["server"]["host"]
     port = port or int(cfg["server"]["port"])
-    httpd = JiaoziServer((host, port), Handler)
+    try:
+        httpd = JiaoziServer((host, port), Handler)
+    except OSError as e:
+        print("=" * 62)
+        print(f"  启动失败：端口 {port} 已被占用，或 {host} 无法绑定。")
+        print(f"  （{e}）")
+        print("")
+        print("  先确认是不是已经开了一个饺子：")
+        if os.name == "nt":
+            print(f"    Get-NetTCPConnection -LocalPort {port} -State Listen |"
+                  " Select-Object OwningProcess")
+        else:
+            print(f"    ss -lptn 'sport = :{port}'    # 或 lsof -i :{port}")
+        print(f"  或者换一个端口：python -m jiaozi --port {port + 1}")
+        print("=" * 62)
+        raise SystemExit(1) from e
     httpd.daemon_threads = True
     real_host = host if host not in ("0.0.0.0", "::") else _lan_ip()
     url = f"http://{real_host}:{port}/"

@@ -48,6 +48,11 @@ def req(method, path, body=None, timeout=30):
         return r.status, {"raw": raw[:300].decode("utf-8", "replace")}
 
 
+#: 1×1 PNG，用来验证「把图存到磁盘」这条链路，不需要真模型
+PNG_1X1 = ("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk"
+           "+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
+
+
 # ------------------------------------------------------------------ 假模型
 class MockLLM(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -78,6 +83,11 @@ class MockLLM(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(n) or b"{}")
         msgs = body.get("messages") or []
         stream = body.get("stream")
+
+        # 假文生图端点：验证「生成 → 落盘」链路
+        if "/images/generations" in self.path:
+            self._json({"created": int(time.time()), "data": [{"b64_json": PNG_1X1, "url": ""}]})
+            return
 
         has_tool_result = any(m.get("role") == "tool" for m in msgs)
         last_user = ""
@@ -352,6 +362,59 @@ def raw(method, path, headers=None, body=None):
     return r.status, data, got
 
 
+def test_image():
+    """图像生成：用假端点验证「生成 → 落盘 → 能被文件接口读回」整条链路。"""
+    print("\n[6] 图像生成")
+    st, j = req("GET", "/api/config")
+    orig = (j.get("data") or {}).get("image") or {}
+    test_dir = "~/.jiaozi/test-images"
+
+    req("POST", "/api/config", {"image": {
+        "enabled": True,
+        "base_url": f"http://127.0.0.1:{MOCK_PORT}/v1",
+        "model": "mock-image",
+        "api_key": "",
+        "save_dir": test_dir,
+    }})
+    try:
+        st, j = req("POST", "/api/image/generate", {"prompt": "一张测试图", "n": 2}, timeout=90)
+        d = j.get("data") or {}
+        files = d.get("files") or []
+        ok("生成接口可用", st == 200 and j.get("ok"), j.get("error"))
+        ok("按要求生成 2 张", len(files) == 2, files)
+
+        sizes = []
+        for f in files:
+            p = os.path.expanduser(f)
+            sizes.append(os.path.getsize(p) if os.path.exists(p) else -1)
+        ok("图片真的落到磁盘上", bool(sizes) and all(s > 0 for s in sizes), sizes)
+
+        if files:
+            conn = http.client.HTTPConnection(HOST, PORT, timeout=15)
+            conn.request("GET", "/api/fs/raw?path=" + urllib.parse.quote(files[0]))
+            r = conn.getresponse()
+            raw = r.read()
+            conn.close()
+            ok("生成的文件能通过文件接口读回", r.status == 200 and len(raw) > 20, r.status)
+
+        req("POST", "/api/config", {"image": {"enabled": False}})
+        st2, j2 = req("POST", "/api/image/generate", {"prompt": "x", "n": 1})
+        ok("关闭后明确拒绝、不偷偷请求", st2 >= 400 and not j2.get("ok"), j2)
+    finally:
+        import glob
+        for p in glob.glob(os.path.expanduser(test_dir) + "/*"):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+        req("POST", "/api/config", {"image": {
+            "enabled": orig.get("enabled", True),
+            "base_url": orig.get("base_url", ""),
+            "model": orig.get("model", ""),
+            "save_dir": orig.get("save_dir") or "~/Pictures/JiaoziAI",
+        }})
+
+
 def test_auth():
     """关掉 localhost 放行，验证 token / cookie / 清单。
 
@@ -419,6 +482,7 @@ def main():
         test_terminal()
         saved = test_agent()
         test_device()
+        test_image()
     finally:
         srv.shutdown()
         if saved:

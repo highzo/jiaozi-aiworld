@@ -16,6 +16,7 @@
     mount: function (root, win) {
       const cfg = JZ.state.config || {};
       const llm = cfg.llm || {}, agent = cfg.agent || {}, ui = cfg.ui || {}, fs = cfg.fs || {};
+      const img = cfg.image || {};
 
       root.innerHTML =
         '<div class="app">' +
@@ -25,6 +26,7 @@
           '<div class="set">' +
             '<div class="set-side">' +
               '<button class="set-nav on" data-tab="llm">' + JZ.icon('sparkles', 15) + 'AI 模型</button>' +
+              '<button class="set-nav" data-tab="image">' + JZ.icon('image', 15) + '图像生成</button>' +
               '<button class="set-nav" data-tab="agent">' + JZ.icon('bot', 15) + '智能体</button>' +
               '<button class="set-nav" data-tab="ui">' + JZ.icon('eye', 15) + '外观</button>' +
               '<button class="set-nav" data-tab="fs">' + JZ.icon('hard-drive', 15) + '沙箱</button>' +
@@ -43,7 +45,7 @@
                   '<input class="input" data-f="model" list="modelList" value="' + esc(llm.model || '') + '" placeholder="qwen2.5:1.5b-instruct">' +
                   '<datalist id="modelList"></datalist></div>' +
                 '<div class="set-field"><label class="hint">API Key（本机模型留空）</label>' +
-                  '<input class="input" data-f="api_key" type="password" value="' + esc(llm.api_key || '') + '" placeholder="' + (llm.api_key_set ? '已设置，留空则不修改' : 'sk-...') + '"></div>' +
+                  '<input class="input" data-f="api_key" type="password" value="" placeholder="' + (llm.api_key_set ? '已设置，留空则不修改' : 'sk-...') + '"></div>' +
               '</div>' +
               '<div class="set-grid2">' +
                 '<div class="set-field"><label class="hint">温度（0 稳定 ~ 1 发散）</label>' +
@@ -63,6 +65,34 @@
                 '<button class="btn" data-role="test">' + JZ.icon('zap', 14) + '测试连接</button>' +
                 '<button class="btn" data-role="models">拉取模型列表</button>' +
                 '<span class="hint" data-role="testOut"></span></div>' +
+            '</div>' +
+
+            /* ---- 图像生成 ---- */
+            '<div data-pane="image" hidden>' +
+              '<h3 class="set-h">图像生成</h3>' +
+              '<p class="set-desc">让 AI 真的画出图片，并保存成你硬盘上的文件。接口地址和 Key 留空时，会复用「AI 模型」里那套配置。</p>' +
+              '<div class="set-field"><label class="hint">图像接口地址</label>' +
+                '<input class="input" data-f="img_base_url" value="' + esc(img.base_url || '') + '" placeholder="留空复用上面的地址，例如 https://apihub.agnes-ai.com/v1"></div>' +
+              '<div class="set-grid2">' +
+                '<div class="set-field"><label class="hint">图像模型</label>' +
+                  '<input class="input" data-f="img_model" value="' + esc(img.model || '') + '" placeholder="agnes-image-2.5-flash"></div>' +
+                '<div class="set-field"><label class="hint">API Key（留空复用上面的）</label>' +
+                  '<input class="input" data-f="img_api_key" type="password" value="" placeholder="' +
+                  (img.api_key_set ? '已单独设置，留空则不修改' : '留空复用上面的 Key') + '"></div>' +
+              '</div>' +
+              '<div class="set-grid2">' +
+                '<div class="set-field"><label class="hint">默认尺寸</label>' +
+                  '<input class="input" data-f="img_size" value="' + esc(img.size || '1024x1024') + '" placeholder="1024x1024 或 1024x1536"></div>' +
+                '<div class="set-field"><label class="hint">保存目录（须在沙箱内）</label>' +
+                  '<input class="input" data-f="img_save_dir" value="' + esc(img.save_dir || '~/Pictures/JiaoziAI') + '"></div>' +
+              '</div>' +
+              '<div class="set-row"><div class="sr-l"><b>启用图像生成</b>' +
+                '<small>关掉后 AI 调 image_gen 会直接报错，不会产生费用。</small></div>' +
+                '<div class="sr-r"><label class="switch"><input type="checkbox" data-f="img_enabled" ' +
+                (img.enabled !== false ? 'checked' : '') + '><i></i></label></div></div>' +
+              '<div style="display:flex;gap:8px;margin-top:14px;align-items:center">' +
+                '<button class="btn" data-role="imgTest">' + JZ.icon('zap', 14) + '生成一张测试图</button>' +
+                '<span class="hint" data-role="imgOut"></span></div>' +
             '</div>' +
 
             /* ---- 智能体 ---- */
@@ -146,7 +176,7 @@
         b.onclick = function () {
           root.querySelectorAll('.set-nav').forEach(x => x.classList.remove('on'));
           b.classList.add('on');
-          ['llm', 'agent', 'ui', 'fs', 'about'].forEach(function (n) { pane(n).hidden = n !== b.dataset.tab; });
+          ['llm', 'image', 'agent', 'ui', 'fs', 'about'].forEach(function (n) { pane(n).hidden = n !== b.dataset.tab; });
         };
       });
 
@@ -245,6 +275,25 @@
         }
       };
 
+      // ---- 图像：真生成一张小图，能落盘才算通 ----
+      q('imgTest').onclick = async function () {
+        const out = q('imgOut');
+        const g = (n) => root.querySelector('[data-f="' + n + '"]');
+        out.textContent = '生成中，通常 10~30 秒…';
+        try {
+          const d = await JZ.api.post('/api/image/test', {
+            base_url: g('img_base_url').value.trim(),
+            model: g('img_model').value.trim(),
+            api_key: g('img_api_key').value.trim(),
+          });
+          const f = (d.files || [])[0];
+          out.innerHTML = '<span style="color:var(--ok)">成功 · ' + (d.elapsed || '?') + 's</span>';
+          if (f) JZ.WM.open('viewer', { path: f });
+        } catch (e) {
+          out.innerHTML = '<span style="color:var(--err)">失败：' + esc(e.message) + '</span>';
+        }
+      };
+
       // ---- 保存 ----
       q('save').onclick = async function () {
         const g = (n) => root.querySelector('[data-f="' + n + '"]');
@@ -265,9 +314,18 @@
           ui: { theme: theme, wallpaper: wallpaper, accent: g('accent').value },
           fs: { roots: roots, max_upload_bytes: Math.round(num(g('max_upload_mb'), 64) * 1048576) },
           device: { enabled: g('device_enabled').checked },
+          image: {
+            base_url: g('img_base_url').value.trim(),
+            model: g('img_model').value.trim(),
+            size: g('img_size').value.trim(),
+            save_dir: g('img_save_dir').value.trim(),
+            enabled: g('img_enabled').checked,
+          },
         };
         const key = g('api_key').value.trim();
         if (key) patch.llm.api_key = key;
+        const ikey = g('img_api_key').value.trim();
+        if (ikey) patch.image.api_key = ikey;
         try {
           const saved = await JZ.api.post('/api/config', patch);
           JZ.state.config = saved;

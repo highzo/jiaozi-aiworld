@@ -190,6 +190,21 @@
   background: repeating-conic-gradient(var(--surface-2) 0% 25%, var(--surface-3) 0% 50%) 50% / 22px 22px; }
 .viewer img { max-width: 100%; max-height: 100%; box-shadow: var(--shadow-2); border-radius: 4px; }
 
+/* 目录相册：底部缩略图条 */
+.vw-strip {
+  flex: 0 0 auto; display: flex; gap: 6px; padding: 6px 8px;
+  overflow-x: auto; overflow-y: hidden;
+  border-top: 1px solid var(--line); background: var(--surface-2);
+}
+.vw-thumb {
+  flex: 0 0 auto; width: 60px; height: 60px; padding: 0; cursor: pointer;
+  border-radius: 7px; overflow: hidden; background: var(--surface-3);
+  border: 2px solid transparent; transition: border-color .12s;
+}
+.vw-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vw-thumb:hover { border-color: var(--line-2); }
+.vw-thumb.on { border-color: var(--accent); }
+
 /* ---------------- 窄屏（手机）适配 ---------------- */
 @media (max-width: 720px) {
   /* 文件管理器：侧栏改成顶部一排可横滑的快捷入口，

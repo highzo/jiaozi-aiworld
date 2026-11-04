@@ -268,6 +268,21 @@ def main() -> int:
         ok("设置表单加载", (js("document.querySelectorAll('.set-field .input').length") or 0) >= 5)
         ok("模型地址已填", "http" in (js("(document.querySelector('[data-f=\\'base_url\\']')||{}).value") or ""))
         shot("04-settings.png")
+
+        # 图像生成页：新加的，得有人守着，否则字段被改坏也没人知道
+        js("(function(){var b=[].slice.call(document.querySelectorAll('.set-nav'))"
+           ".filter(function(n){return n.dataset.tab==='image';})[0]; if(b)b.click();"
+           "return !!b;})()")
+        time.sleep(0.6)
+        ok("设置里有「图像生成」页",
+           js("!!document.querySelector('[data-pane=\"image\"]')") is True)
+        ok("图像页字段齐全（地址/模型/Key/尺寸/目录）",
+           (js("document.querySelectorAll('[data-pane=\"image\"] .set-field .input').length") or 0) >= 5)
+        ok("API Key 输入框不回填脱敏星号",
+           not (js("(document.querySelector('[data-f=\\'img_api_key\\']')||{}).value") or "").startswith("****"))
+        ok("图像页可切回模型页",
+           (js("(function(){var b=document.querySelector('.set-nav[data-tab=\"llm\"]');"
+               "if(b)b.click(); return !document.querySelector('[data-pane=\"llm\"]').hidden;})()")) is True)
         js("JZ.WM.open('monitor')")
         time.sleep(2.5)
         ok("进程表有数据", (js("document.querySelectorAll('.mon-table tbody tr').length") or 0) > 1,

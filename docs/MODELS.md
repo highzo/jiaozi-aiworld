@@ -85,6 +85,45 @@ cmake -B build -DGGML_NATIVE=ON && cmake --build build -j$(nproc)
 注意：只有**非本机/非局域网**地址才会走系统代理；`127.0.0.1`、`192.168.*`、`10.*`、`172.16-31.*`
 和 `*.local` 一律直连——否则本机模型会被代理打成 502。
 
+## 图像模型（让 AI 会画画）
+
+文本模型和图像模型是两条独立的配置。图像这块只要求对方暴露
+OpenAI 风格的 `POST /v1/images/generations`。
+
+### Agnes AI（免费额度够玩很久，实测可用）
+
+```json
+{
+  "image": {
+    "base_url": "https://apihub.agnes-ai.com/v1",
+    "model": "agnes-image-2.5-flash",
+    "api_key": "sk-...",
+    "size": "1024x1024",
+    "save_dir": "~/Pictures/JiaoziAI"
+  }
+}
+```
+
+可用模型：`agnes-image-2.1-flash`（纯文生图）、`agnes-image-2.0-flash`（含图生图）、
+`agnes-image-2.5-flash`（最新）。实测 1024×1024 约 14~30 秒出图，返回图片 URL，
+本项目会自动下载并落盘。注册在 <https://platform.agnes-ai.com/>，创建 Key 不需要绑卡。
+
+### 本机方案
+
+- **ComfyUI**：装 `ComfyUI-OpenAI-API` 之类的节点把工作流包成 `/v1/images/generations`
+- **SD-WebUI**：用 `--api` 起服务，再套一层 OpenAI 兼容网关（如 `sd-webui-openai-api`）
+- 本机端点同样走直连，不会被系统代理劫持
+
+### 提示词怎么写
+
+`image_gen` 的 prompt 直接把中文丢给模型就行，中文理解普遍没问题。写具体：
+
+> 一位穿米色针织衫的年轻女性，坐在窗边低头看书，午后自然侧光，
+> 浅景深，背景是虚化的城市天际线，真实摄影质感，85mm 镜头
+
+不要在一个 prompt 里描述多个画面（"第一张…第二张…"）——模型会把它们画进同一张画布的左右两半。
+要几张不同的图，就让 AI 调几次，每次只写一个场景。
+
 ## 调参建议
 
 | 参数 | 默认 | 说明 |
