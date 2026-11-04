@@ -184,6 +184,17 @@ def main() -> int:
         ws = WS(page["webSocketDebuggerUrl"], timeout=40)
         ws.call("Page.enable")
         ws.call("Runtime.enable")
+        # 在页面脚本之前装一个错误收集器：静默的 JS 异常最难发现，
+        # 元素都在但功能坏掉，全靠这一条兜住。
+        ws.call("Page.addScriptToEvaluateOnNewDocument", {"source": (
+            "window.__jzErrs=[];"
+            "addEventListener('error',function(e){"
+            "  window.__jzErrs.push(String((e&&e.message)||e));"
+            "});"
+            "addEventListener('unhandledrejection',function(e){"
+            "  window.__jzErrs.push('promise: '+String((e&&e.reason)||e));"
+            "});"
+        )})
         print(f"调试目标: {page.get('url')}")
 
         def goto(url, wait=3.0):
@@ -210,6 +221,8 @@ def main() -> int:
            js("document.querySelectorAll('#icons .dicon').length"))
         ok("任务栏应用存在", (js("document.querySelectorAll('#tbApps .tb-app').length") or 0) >= 5)
         ok("AI 面板打开", js("document.body.classList.contains('ai-open')"))
+        ok("无 JS 异常", not (js("window.__jzErrs") or []),
+           (js("window.__jzErrs") or [])[:3])
         ok("PWA 清单可加载", js("fetch('/manifest.webmanifest').then(function(r){return r.status})") == 200)
         ok("图标可加载", js("fetch('/icon.svg').then(function(r){return r.status})") == 200)
         shot("01-desktop.png")
@@ -279,6 +292,8 @@ def main() -> int:
         js("(function(){var w=JZ.WM.active;if(w){JZ.WM.toggleMax(w);JZ.WM.close(w);}return true;})()")
         time.sleep(0.4)
         ok("窗口可关闭", (js("JZ.WM.wins.size") or 0) == (before or 0))
+        ok("交互全程无 JS 异常", not (js("window.__jzErrs") or []),
+           (js("window.__jzErrs") or [])[:3])
 
         # 手机竖屏：这是「同一套系统跑安卓」的核心理由，必须真的量一遍
         print("\n[UI-7] 手机竖屏（390×844）")

@@ -208,7 +208,7 @@ jiaozi-aiworld/
 ```bash
 python3 tests/smoke_test.py     # 52 项：HTTP、沙箱、终端、Agent 循环、审批、设备、鉴权
 node tests/vt_test.js           # 24 项：VT 解析、颜色、光标、宽字符、HTML 转义
-python3 tests/ui_test.py        # 34 项：真实浏览器加载、点开应用、真敲键盘、手机竖屏、截图
+python3 tests/ui_test.py        # 36 项：真实浏览器加载、点开应用、真敲键盘、手机竖屏、截图
 ```
 
 `smoke_test.py` 内置了一个假的 OpenAI 兼容模型服务，所以**没有真模型也能验证完整 Agent 链路**：
