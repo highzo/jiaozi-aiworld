@@ -1,0 +1,214 @@
+/* ============================================================
+   内置应用
+   ============================================================ */
+.app { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--surface-solid); }
+.app-bar {
+  display: flex; align-items: center; gap: 6px; padding: 7px 10px; flex: 0 0 auto;
+  border-bottom: 1px solid var(--line); background: var(--surface-2); overflow: hidden;
+}
+.app-bar .tb-search { flex: 0 1 200px; min-width: 84px; }
+.app-bar .tb-search input { min-width: 0; }
+.app-bar .sep { width: 1px; height: 18px; background: var(--line); margin: 0 2px; }
+.app-status {
+  display: flex; align-items: center; gap: 12px; height: 26px; flex: 0 0 auto;
+  padding: 0 12px; border-top: 1px solid var(--line); background: var(--surface-2);
+  font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums;
+}
+.app-status .grow { flex: 1; }
+.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  flex: 1; color: var(--text-3); font-size: 12.5px; }
+.empty svg { width: 40px; height: 40px; opacity: .35; }
+
+/* ---------------- 文件管理器 ---------------- */
+.fm { display: flex; flex: 1; min-height: 0; }
+.fm-side {
+  width: 176px; flex: 0 0 176px; border-right: 1px solid var(--line);
+  padding: 8px 7px; overflow-y: auto; background: var(--surface-2);
+}
+.fm-grp { padding: 10px 9px 4px; font-size: 10.5px; font-weight: 600; color: var(--text-3); letter-spacing: .3px; }
+.fm-nav {
+  display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 9px;
+  border-radius: 7px; font-size: 12.5px; color: var(--text-2); cursor: default; width: 100%;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.fm-nav:hover { background: var(--surface-3); }
+.fm-nav.on { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+.fm-nav svg { width: 15px; height: 15px; flex: 0 0 auto; }
+.fm-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.fm-crumb {
+  display: flex; align-items: center; gap: 2px; padding: 0 10px; height: 34px;
+  border-bottom: 1px solid var(--line); overflow-x: auto; white-space: nowrap; flex: 0 0 auto;
+}
+.fm-crumb button {
+  padding: 3px 7px; border-radius: 6px; font-size: 12.3px; color: var(--text-2);
+}
+.fm-crumb button:hover { background: var(--surface-3); color: var(--text); }
+.fm-crumb button:last-child { color: var(--text); font-weight: 500; }
+.fm-crumb .sl { color: var(--text-3); font-size: 11px; }
+.fm-head, .fm-row {
+  display: grid; grid-template-columns: 1fr 92px 132px; align-items: center;
+  gap: 8px; padding: 0 12px; height: 34px;
+}
+.fm-head {
+  flex: 0 0 auto; font-size: 11.5px; color: var(--text-3); font-weight: 500;
+  border-bottom: 1px solid var(--line); background: var(--surface-2);
+}
+.fm-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+.fm-row { cursor: default; border-radius: 7px; margin: 0 6px; height: 33px; }
+.fm-row:hover { background: var(--surface-2); }
+.fm-row.sel { background: var(--accent-soft); box-shadow: inset 0 0 0 1px rgba(47,107,255,.22); }
+.fm-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fm-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.8px; }
+.fm-ico { width: 18px; height: 18px; flex: 0 0 auto; display: grid; place-items: center; color: var(--text-3); }
+.fm-ico.dir { color: #e8a33d; }
+.fm-ico.img { color: #22a06b; }
+.fm-ico.text { color: #4f7df3; }
+.fm-ico svg { width: 16px; height: 16px; }
+.fm-meta { font-size: 11.8px; color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
+.fm-list.drag-over { background: var(--accent-soft); }
+
+/* ---------------- 终端 ---------------- */
+.term-wrap { flex: 1; position: relative; overflow: hidden; background: #0c1119; min-height: 0; }
+.term-screen {
+  position: absolute; inset: 0; padding: 7px 10px; overflow: hidden;
+  font-family: var(--mono); font-size: 12.6px; line-height: 1.36;
+  color: #cdd6e4; white-space: pre; tab-size: 4;
+}
+.term-line { height: 1.36em; white-space: pre; }
+.term-cursor {
+  position: absolute; width: .62em; height: 1.28em; pointer-events: none;
+  background: rgba(205, 214, 228, .75); border-radius: 1px;
+  animation: tcur 1.05s steps(2) infinite; mix-blend-mode: screen;
+}
+@keyframes tcur { 50% { opacity: 0 } }
+.term-input {
+  position: absolute; left: -9999px; top: 0; width: 10px; height: 10px;
+  opacity: 0; border: 0; resize: none;
+}
+.term-tabbar {
+  display: flex; align-items: center; gap: 4px; padding: 4px 8px; flex: 0 0 auto;
+  background: #131a25; border-bottom: 1px solid rgba(255,255,255,.06);
+  color: #93a3b8; font-size: 11.8px;
+}
+.term-tabbar .dot { width: 7px; height: 7px; border-radius: 50%; background: #3fb950; }
+.term-tabbar .sp { flex: 1; }
+.term-tabbar button { color: #93a3b8; padding: 2px 7px; border-radius: 5px; font-size: 11.5px; }
+.term-tabbar button:hover { background: rgba(255,255,255,.08); color: #dbe4f0; }
+.term-banner { color: #6f8199; }
+
+/* ---------------- 编辑器 ---------------- */
+.ed { display: flex; flex: 1; min-height: 0; background: var(--surface-solid); }
+.ed-gutter {
+  flex: 0 0 auto; padding: 10px 8px 10px 12px; text-align: right; overflow: hidden;
+  font-family: var(--mono); font-size: 12.4px; line-height: 1.6; color: var(--text-3);
+  background: var(--surface-2); border-right: 1px solid var(--line); user-select: none;
+  font-variant-numeric: tabular-nums; white-space: pre;
+}
+.ed-area {
+  flex: 1; min-width: 0; padding: 10px 14px; border: 0; outline: none; resize: none;
+  font-family: var(--mono); font-size: 12.8px; line-height: 1.6; color: var(--text);
+  background: var(--surface-solid); white-space: pre; overflow: auto; tab-size: 4;
+}
+.ed-dirty { color: var(--warn); font-size: 15px; line-height: 1; }
+
+/* ---------------- 系统监视器 ---------------- */
+.mon { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.mon-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.mon-card {
+  padding: 11px 13px; border-radius: 11px; background: var(--surface-2);
+  border: 1px solid var(--line); position: relative; overflow: hidden;
+}
+.mon-card .mc-top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+.mon-card .mc-label { font-size: 11.5px; color: var(--text-3); font-weight: 500; }
+.mon-card .mc-val { font-size: 21px; font-weight: 600; letter-spacing: -.4px; font-variant-numeric: tabular-nums; }
+.mon-card .mc-sub { font-size: 11.3px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.mon-bar { height: 4px; border-radius: 99px; background: var(--line); overflow: hidden; margin-top: 8px; }
+.mon-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .4s; }
+.mon-bar.warn i { background: linear-gradient(90deg, #f5a524, #f0653f); }
+.mon-spark { width: 100%; height: 58px; display: block; margin-top: 6px; }
+.mon-sec-title { font-size: 12px; font-weight: 600; color: var(--text-2); padding: 2px 2px 0; }
+.mon-table { width: 100%; border-collapse: collapse; font-size: 12.2px; }
+.mon-table th {
+  text-align: left; font-weight: 500; font-size: 11.3px; color: var(--text-3);
+  padding: 6px 8px; border-bottom: 1px solid var(--line); position: sticky; top: 0;
+  background: var(--surface-solid);
+}
+.mon-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.mon-table tr:hover td { background: var(--surface-2); }
+.mon-table .pname { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mon-kill { color: var(--err); font-size: 11.5px; padding: 2px 7px; border-radius: 5px; }
+.mon-kill:hover { background: rgba(224,65,63,.1); }
+
+/* ---------------- 设置 ---------------- */
+.set { display: flex; flex: 1; min-height: 0; }
+.set-side { width: 158px; flex: 0 0 158px; padding: 8px 7px; border-right: 1px solid var(--line); background: var(--surface-2); }
+.set-nav {
+  display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 7px;
+  font-size: 12.5px; color: var(--text-2); width: 100%; text-align: left;
+}
+.set-nav:hover { background: var(--surface-3); }
+.set-nav.on { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+.set-nav svg { width: 15px; height: 15px; }
+.set-main { flex: 1; overflow-y: auto; padding: 16px 20px 28px; min-width: 0; }
+.set-h { font-size: 15px; font-weight: 620; margin: 0 0 4px; }
+.set-desc { font-size: 12.3px; color: var(--text-3); margin: 0 0 16px; line-height: 1.55; }
+.set-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 11px 0; border-bottom: 1px solid var(--line);
+}
+.set-row:last-child { border-bottom: 0; }
+.set-row .sr-l { flex: 1; min-width: 0; }
+.set-row .sr-l b { font-size: 12.8px; font-weight: 550; display: block; }
+.set-row .sr-l small { font-size: 11.8px; color: var(--text-3); display: block; margin-top: 2px; line-height: 1.45; }
+.set-row .sr-r { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
+.set-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.set-field > label { font-size: 12.2px; color: var(--text-2); font-weight: 500; }
+.set-field .input { max-width: 420px; }
+.set-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.wp-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 460px; }
+.wp-sw {
+  aspect-ratio: 16/10; border-radius: 8px; border: 2px solid transparent;
+  cursor: pointer; position: relative; overflow: hidden;
+}
+.wp-sw.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.wp-sw span { position: absolute; bottom: 4px; left: 6px; font-size: 10px; color: #1c2a3a; text-shadow: 0 1px 2px rgba(255,255,255,.6); }
+.root-item {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px;
+  background: var(--surface-2); border: 1px solid var(--line); margin-bottom: 6px; font-size: 12.3px;
+}
+.root-item code { font-family: var(--mono); font-size: 11.6px; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.about-box { display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); }
+.about-box .logo { width: 54px; height: 54px; border-radius: 16px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: grid; place-items: center; color: #fff; }
+.kv { display: grid; grid-template-columns: 92px 1fr; gap: 5px 10px; font-size: 12.2px; margin-top: 12px; }
+.kv b { color: var(--text-3); font-weight: 500; }
+.kv span { font-family: var(--mono); font-size: 11.6px; word-break: break-all; }
+.token-box { display: flex; gap: 6px; align-items: center; }
+.token-box input { font-family: var(--mono); font-size: 11.5px; }
+
+/* ---------------- 图片查看器 ---------------- */
+.viewer { flex: 1; display: grid; place-items: center; overflow: auto;
+  background: repeating-conic-gradient(var(--surface-2) 0% 25%, var(--surface-3) 0% 50%) 50% / 22px 22px; }
+.viewer img { max-width: 100%; max-height: 100%; box-shadow: var(--shadow-2); border-radius: 4px; }
+
+/* ---------------- 窄屏（手机）适配 ---------------- */
+@media (max-width: 720px) {
+  /* 文件管理器：侧栏改成顶部一排可横滑的快捷入口，
+     否则 176px 的固定侧栏会把「名称」列挤成 0 宽，文件名整个看不见 */
+  .fm { flex-direction: column; }
+  .fm-side {
+    width: auto; flex: 0 0 auto; display: flex; align-items: center;
+    gap: 4px; overflow-x: auto; overflow-y: hidden;
+    border-right: 0; border-bottom: 1px solid var(--line);
+    padding: 6px 7px; background: var(--surface-2);
+  }
+  .fm-grp { display: none; }
+  .fm-nav { width: auto; flex: 0 0 auto; padding: 0 11px; }
+  /* 只留「名称 + 修改时间」，大小列在手机上价值低 */
+  .fm-head, .fm-row { grid-template-columns: 1fr 82px; gap: 6px; padding: 0 10px; }
+  .fm-head > span:nth-child(2), .fm-row > .fm-meta:nth-child(2) { display: none; }
+  .fm-crumb { height: 32px; }
+
+  /* 设置页两列网格在窄屏下会挤成竖条 */
+  .set-grid2 { grid-template-columns: 1fr; }
+  .mon-cards { grid-template-columns: 1fr; }
+}
