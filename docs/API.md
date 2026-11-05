@@ -243,6 +243,60 @@ curl -X POST localhost:8787/api/device/task \
 
 ---
 
+## 局域网互认（peer）
+
+同一个局域网里的多个饺子互相发现、配对、调用。设计说明见 `jiaozi/peer.py` 顶部。
+
+| 方法 | 路径 | 鉴权 | 说明 |
+|---|---|---|---|
+| GET | `/api/peer/state` | 需要 | 本机身份 + 附近设备 + 已配对表 |
+| GET | `/api/peer/hello` | **公开** | 探活：名字、端口、能力，**不含 token** |
+| POST | `/api/peer/code` | 需要 | 生成一次性 6 位配对码（5 分钟） |
+| POST | `/api/peer/claim` | **公开** | 拿配对码换取本机 token（对方此时还没有 token） |
+| POST | `/api/peer/pair` | 需要 | 主动配对：`{host, port, code}` |
+| POST | `/api/peer/probe` | 需要 | 手动探测某个地址是不是饺子 |
+| POST | `/api/peer/exec` | 需要 | 远程执行一个工具：`{tool, args}` |
+| POST | `/api/peer/forget` | 需要 | 删除配对关系 `{id}` |
+| POST | `/api/peer/announce` | 需要 | 立刻广播一次（不等 5 秒轮询） |
+
+只有 `/api/peer/hello` 和 `/api/peer/claim` 走公开白名单，理由见代码里的 `PUBLIC_API` 注释：
+配对发生的时刻，双方还没有共享凭据，这一步必须能在无 token 下完成；
+安全性靠一次性码 + 5 分钟过期 + 试错上限（6 次）来保证。
+
+**一次完整配对**
+
+```bash
+# 1) A 机器上生成码（界面上点「生成配对码」也是同一个接口）
+curl -X POST localhost:8787/api/peer/code -H "X-Jiaozi-Token: $TOKEN_A"
+# {"ok":true,"data":{"code":"752330","expires":...,"ttl":300,"name":"客厅电脑"}}
+
+# 2) B 机器上输入 A 的地址和这个码
+curl -X POST localhost:8787/api/peer/pair \
+  -H "X-Jiaozi-Token: $TOKEN_B" -H 'Content-Type: application/json' \
+  -d '{"host":"192.168.1.20","port":8787,"code":"752330"}'
+
+# 3) 之后 B 就能在 A 上执行工具
+curl -X POST localhost:8787/api/peer/exec \
+  -H "X-Jiaozi-Token: $TOKEN_B" -H 'Content-Type: application/json' \
+  -d '{"tool":"fs_list","args":{"path":"~/Desktop"}}'
+```
+
+`/api/peer/state` 的返回里，已配对的设备会带 `token`（对方的访问凭据）。
+这是刻意留的：前端要拿它拼「打开对方桌面」的地址，能读这个接口的调用方本来就已经通过本机鉴权。
+
+**发现的实现**
+
+UDP 组播到 `239.255.77.87:8788`，每 5 秒一条 JSON。每张网卡各发一遍——
+多网卡机器（WSL / Hyper-V / VMware 虚拟网卡）只发默认网卡会漏。
+组播被禁时发现栏会一直空着，但不影响手动填 IP 配对。
+
+**不能做的事**
+
+- `/api/peer/exec` 拒绝执行 `peer_call` / `peer_list`，否则 A→B→A 会无限套娃。
+- 跨设备调用用的是目标机自己的 token，没有"万能钥匙"这种东西。
+
+---
+
 ## 桌面操作（给外部程序用）
 
 ```bash

@@ -17,6 +17,8 @@
       const cfg = JZ.state.config || {};
       const llm = cfg.llm || {}, agent = cfg.agent || {}, ui = cfg.ui || {}, fs = cfg.fs || {};
       const img = cfg.image || {};
+      const peer = cfg.peer || {};
+      const hostname = (cfg._meta || {}).hostname || '';
 
       root.innerHTML =
         '<div class="app">' +
@@ -30,6 +32,7 @@
               '<button class="set-nav" data-tab="agent">' + JZ.icon('bot', 15) + '智能体</button>' +
               '<button class="set-nav" data-tab="ui">' + JZ.icon('eye', 15) + '外观</button>' +
               '<button class="set-nav" data-tab="fs">' + JZ.icon('hard-drive', 15) + '沙箱</button>' +
+              '<button class="set-nav" data-tab="peer">' + JZ.icon('wifi', 15) + '设备互联</button>' +
               '<button class="set-nav" data-tab="about">' + JZ.icon('info', 15) + '关于</button>' +
             '</div>' +
             '<div class="set-main">' +
@@ -148,6 +151,26 @@
                 '<small>超过这个大小的文件需要走命令行拷贝。</small></div>' +
                 '<div class="sr-r"><input class="input" data-f="max_upload_mb" type="number" min="1" max="2048" style="width:100px" value="' +
                 Math.round((fs.max_upload_bytes || 67108864) / 1048576) + '"><span class="hint">MB</span></div></div>' +
+            '</div>' +
+
+            /* ---- 设备互联 ---- */
+            '<div data-pane="peer" hidden>' +
+              '<h3 class="set-h">设备互联</h3>' +
+              '<p class="set-desc">同一个 WiFi 下的其他饺子会出现在「设备」里，配对之后就能互相调用工具——' +
+                '比如用手机指挥这台电脑干活。改完保存立即生效。</p>' +
+              '<div class="set-field"><label class="hint">本机设备名（留空用主机名）</label>' +
+                '<input class="input" data-f="peer_name" value="' + esc(peer.name || '') + '" placeholder="' +
+                esc(hostname || '例如 客厅电脑') + '"></div>' +
+              '<div class="set-row"><div class="sr-l"><b>局域网自动发现</b>' +
+                '<small>每 5 秒向局域网发一次组播。公共 WiFi 常禁组播——关掉之后仍然可以在「设备」里手动填 IP 配对。</small></div>' +
+                '<div class="sr-r"><label class="switch"><input type="checkbox" data-f="peer_discovery" ' +
+                (peer.discovery !== false ? 'checked' : '') + '><i></i></label></div></div>' +
+              '<div class="set-row"><div class="sr-l"><b>允许别的东西调用本机</b>' +
+                '<small>关闭后本机不再提供跨设备执行接口，已配对的对端全部失效。给自己留条后路，别在远程操作时关。</small></div>' +
+                '<div class="sr-r"><label class="switch"><input type="checkbox" data-f="peer_enabled" ' +
+                (peer.enabled !== false ? 'checked' : '') + '><i></i></label></div></div>' +
+              '<p class="set-desc" style="margin-top:14px">配对不需要密码，也不需要记 IP：在对方那台点「生成配对码」，' +
+                '在这台输入 6 位数字即可。码一次性、5 分钟过期、试错 6 次作废。</p>' +
             '</div>' +
 
             /* ---- 关于 ---- */
@@ -314,6 +337,11 @@
           ui: { theme: theme, wallpaper: wallpaper, accent: g('accent').value },
           fs: { roots: roots, max_upload_bytes: Math.round(num(g('max_upload_mb'), 64) * 1048576) },
           device: { enabled: g('device_enabled').checked },
+          peer: {
+            name: g('peer_name').value.trim(),
+            discovery: g('peer_discovery').checked,
+            enabled: g('peer_enabled').checked,
+          },
           image: {
             base_url: g('img_base_url').value.trim(),
             model: g('img_model').value.trim(),

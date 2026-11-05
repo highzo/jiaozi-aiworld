@@ -312,6 +312,32 @@ def main() -> int:
         ok("交互全程无 JS 异常", not (js("window.__jzErrs") or []),
            (js("window.__jzErrs") or [])[:3])
 
+        print("\n[UI-6b] 设备（局域网互认）")
+        js("JZ.WM.open('devices')")
+        time.sleep(1.6)
+        ok("设备窗口打开", (js("document.querySelectorAll('.dev').length") or 0) > 0)
+        ok("本机卡片有地址", bool(js(
+            "(function(){var e=document.querySelector('.dev-me small');"
+            "return e&&e.textContent.length>6;})()")))
+        ok("生成配对码按钮存在", js(
+            "!!document.querySelector('[data-act=\"code\"]')") is True)
+        ok("手动配对输入框存在", (js("document.querySelectorAll('.dev-add .input').length") or 0) >= 3)
+
+        js("document.querySelector('[data-act=\"code\"]').click()")
+        time.sleep(1.2)
+        code_txt = js("(function(){var e=document.querySelector('.dc-num');"
+                      "return e?e.textContent.trim():'';})()")
+        ok("弹出 6 位配对码", bool(code_txt) and len(code_txt) == 6 and code_txt.isdigit(), code_txt)
+        ok("配对码带倒计时说明", bool(js(
+            "(function(){var e=document.querySelector('.dc-tip');"
+            "return e&&/剩余/.test(e.textContent);})()")))
+        ok("设备列表有内容（空态也算）", (js("document.querySelectorAll('.dev-item, .dev .empty').length") or 0) > 0)
+        ok("设备页无 JS 异常", not (js("window.__jzErrs") or []),
+           (js("window.__jzErrs") or [])[:3])
+        shot("07b-devices.png")
+        js("(function(){var w=JZ.WM.active;if(w)JZ.WM.close(w);return true;})()")
+        time.sleep(0.3)
+
         # 手机竖屏：这是「同一套系统跑安卓」的核心理由，必须真的量一遍
         print("\n[UI-7] 手机竖屏（390×844）")
         js("(function(){var a=document.querySelectorAll('#icons .dicon');return a.length;})()")

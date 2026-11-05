@@ -9,7 +9,7 @@ import json
 import re
 import urllib.request
 
-from .. import config, fsapi, sysinfo
+from .. import config, fsapi, peer, sysinfo
 from ..eventbus import BUS
 from ..shell import SHELLS
 
@@ -93,12 +93,23 @@ TOOL_SPECS: list[dict] = [
         "name": "web_fetch", "description": "抓取网页并返回纯文本（需要设备联网）。",
         "parameters": {"type": "object", "properties": {
             "url": _p("url", "string", "http/https 地址")}, "required": ["url"]}}},
+    {"type": "function", "function": {
+        "name": "peer_list", "description": "列出同一个局域网里我认得的设备（已配对的 + 刚被发现的），含在线状态和能力。想知道「除了这台机器，我还能指挥谁」时用它。",
+        "parameters": {"type": "object", "properties": {}, "required": []}}},
+    {"type": "function", "function": {
+        "name": "peer_call",
+        "description": "在局域网里的另一台设备上执行一个工具：比如在客厅的电脑上读文件、跑命令、打开窗口。只对已配对的设备有效；device 填 peer_list 里的 id 或名字。",
+        "parameters": {"type": "object", "properties": {
+            "device": _p("device", "string", "目标设备的 id 或名字，见 peer_list"),
+            "tool": _p("tool", "string", "在那个设备上执行的工具名，如 fs_list / shell_run / ui_open"),
+            "args": {"type": "object", "description": "那个工具需要的参数，按它的参数表填，没有就空对象"}},
+            "required": ["device", "tool"]}}},
 ]
 
 TOOL_NAMES = [t["function"]["name"] for t in TOOL_SPECS]
 
 #: 需要人类确认的工具（approval=auto 时生效）
-DANGEROUS = {"fs_delete", "shell_run", "proc_kill", "web_fetch"}
+DANGEROUS = {"fs_delete", "shell_run", "proc_kill", "web_fetch", "peer_call"}
 
 #: 会改动系统的工具
 WRITE_TOOLS = {"fs_write", "fs_mkdir", "shell_run", "proc_kill", "fs_delete"}
@@ -115,6 +126,24 @@ def _truncate(s: str, n: int) -> str:
 
 def _json(obj) -> str:
     return json.dumps(obj, ensure_ascii=False, default=str)
+
+
+def resolve_peer(target: str) -> str:
+    """把「设备名」或 id 解析成 peer id。名字允许唯一子串匹配。"""
+    target = (target or "").strip()
+    if not target:
+        return ""
+    peers = peer.snapshot().get("peers") or []
+    for p in peers:
+        if p.get("id") == target:
+            return p["id"]
+    low = target.lower()
+    for p in peers:
+        if p.get("paired") and (p.get("name") or "").lower() == low:
+            return p["id"]
+    hits = [p for p in peers
+            if p.get("paired") and low in (p.get("name") or "").lower()]
+    return hits[0]["id"] if len(hits) == 1 else ""
 
 
 _HTML_TAG = re.compile(r"<[^>]+>")
@@ -219,6 +248,39 @@ def dispatch(name: str, args: dict, ctx: dict | None = None) -> str:
             text = re.sub(r"[ \t]{2,}", " ", text).strip()
             return _truncate(f"URL: {url}\n\n{text}", limit)
 
+        if name == "peer_list":
+            s = peer.snapshot()
+            me = s.get("me") or {}
+            rows = [{"id": p["id"], "name": p["name"], "online": p["online"],
+                     "paired": p["paired"], "ip": p.get("ip"), "port": p.get("port"),
+                     "caps": p.get("caps") or []} for p in s.get("peers") or []]
+            return _truncate(_json({
+                "me": {"name": me.get("name"), "ips": me.get("ips"),
+                       "discovery": me.get("discovery")},
+                "count": len(rows), "peers": rows}), limit)
+
+        if name == "peer_call":
+            target = str(args.get("device") or "").strip()
+            tool = str(args.get("tool") or "").strip()
+            a = args.get("args")
+            if isinstance(a, str):  # 小模型常把对象写成字符串
+                try:
+                    a = json.loads(a)
+                except Exception:
+                    a = {}
+            if not isinstance(a, dict):
+                a = {}
+            if not target or not tool:
+                return "错误：需要 device（设备 id 或名字）和 tool（工具名）"
+            pid = resolve_peer(target)
+            if not pid:
+                names = [p["name"] for p in peer.snapshot().get("peers") or []
+                         if p.get("paired")]
+                return (f"错误：没有唯一匹配「{target}」的已配对设备。"
+                        f"当前已配对: {names or '无'}，先用 peer_list 看看")
+            r = peer.call(pid, tool, a)
+            return _truncate(_json({"device": peer.peer_name(pid), **r}), limit)
+
         return f"错误：未知工具 {name}"
     except fsapi.FSError as e:
         return f"错误：{e}"
@@ -255,4 +317,8 @@ def tool_summary(name: str, args: dict) -> str:
         return f"通知：{a.get('title', '')}"
     if name == "web_fetch":
         return f"抓取 {a.get('url', '')}"
+    if name == "peer_list":
+        return "查看局域网里的设备"
+    if name == "peer_call":
+        return f"在 {a.get('device', '')} 上执行 {a.get('tool', '')}"
     return name

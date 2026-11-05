@@ -19,7 +19,7 @@ import urllib.parse
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import config, fsapi, sysinfo
+from . import config, fsapi, peer, sysinfo
 from .agent import tools as T
 from .agent.llm import LLMClient, LLMError
 from .agent.loop import get_session
@@ -45,6 +45,12 @@ MIME = {
 }
 
 ROUTES: list[tuple[str, re.Pattern, str]] = []
+
+#: 不需要 token 就能访问的接口。目前只有两个，都是配对流程必需的：
+#:   /api/peer/hello —— 探活，只返回设备名/端口/能力，不含任何凭据
+#:   /api/peer/claim —— 拿一次性配对码换 token（对方此时还没有 token）
+#: 其余 /api/* 一律要求鉴权。
+PUBLIC_API = {"/api/peer/hello", "/api/peer/claim"}
 
 
 def route(method: str, pattern: str):
@@ -218,7 +224,7 @@ class Handler(BaseHTTPRequestHandler):
         query = urllib.parse.parse_qs(parsed.query)
         try:
             is_api = path.startswith("/api/")
-            if is_api and not self.authed():
+            if is_api and path not in PUBLIC_API and not self.authed():
                 self.send_json({"ok": False, "error": "未授权：需要 token"}, 401)
                 return
             # 路由表对根路径也生效（/favicon.ico、/manifest.webmanifest）；
@@ -238,6 +244,8 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.send_json({"ok": False, "error": "not found"}, 404)
         except ApiError as e:
+            self.send_json({"ok": False, "error": e.msg}, e.code)
+        except peer.PeerError as e:
             self.send_json({"ok": False, "error": e.msg}, e.code)
         except fsapi.FSError as e:
             self.send_json({"ok": False, "error": str(e)}, e.code)
@@ -324,7 +332,8 @@ class Handler(BaseHTTPRequestHandler):
         body = self.read_json()
         cur = config.load()
         clean: dict = {}
-        allowed = {"server", "fs", "llm", "image", "agent", "ui", "shell", "device"}
+        allowed = {"server", "fs", "llm", "image", "agent", "ui", "shell",
+                   "device", "peer"}
         for k, v in body.items():
             if k in allowed and isinstance(v, dict):
                 clean[k] = v
@@ -347,6 +356,13 @@ class Handler(BaseHTTPRequestHandler):
                 }, 403)
                 return
         cfg = config.save(clean)
+        # 改了设备名或发现开关：原地重启发现线程，别逼人重启整个服务
+        if "peer" in clean:
+            try:
+                peer.stop()
+                peer.start(self.server.server_address[1])
+            except Exception as e:  # noqa: BLE001
+                print(f"[peer] 按新配置重启失败：{e}")
         BUS.publish("config", {"changed": list(clean.keys())})
         self.send_json({"ok": True, "data": config.public_view(cfg)})
 
@@ -658,6 +674,65 @@ class Handler(BaseHTTPRequestHandler):
                         "result": final, "steps": steps,
                         "elapsed": round(time.time() - t0, 2)})
 
+    # ================================================================ 局域网互认
+    # 发现 / 配对 / 跨设备调用。设计说明见 jiaozi/peer.py 顶部。
+    @route("GET", r"/api/peer/state")
+    def api_peer_state(self, q):
+        self.send_json({"ok": True, "data": peer.snapshot()})
+
+    @route("GET", r"/api/peer/hello")
+    def api_peer_hello(self, q):
+        """公开探活：不含 token，给还没配对的设备确认「对面是饺子」。"""
+        self.send_json({"ok": True, "data": peer.hello()})
+
+    @route("POST", r"/api/peer/code")
+    def api_peer_code(self, q):
+        self.send_json({"ok": True, "data": peer.make_code()})
+
+    @route("POST", r"/api/peer/claim")
+    def api_peer_claim(self, q):
+        """公开：对端拿配对码来换 token。安全性靠一次性 + 5 分钟 + 试错上限。"""
+        b = self.read_json()
+        self.send_json({"ok": True, "data": peer.claim(b.get("code") or "", b)})
+
+    @route("POST", r"/api/peer/pair")
+    def api_peer_pair(self, q):
+        b = self.read_json()
+        self.send_json({"ok": True, "data": peer.pair(
+            b.get("host") or "", b.get("port") or 0, b.get("code") or "")})
+
+    @route("POST", r"/api/peer/probe")
+    def api_peer_probe(self, q):
+        b = self.read_json()
+        self.send_json({"ok": True, "data": peer.probe(
+            b.get("host") or "", b.get("port") or 0)})
+
+    @route("POST", r"/api/peer/forget")
+    def api_peer_forget(self, q):
+        b = self.read_json()
+        self.send_json({"ok": True, "data": peer.forget(b.get("id") or "")})
+
+    @route("POST", r"/api/peer/announce")
+    def api_peer_announce(self, q):
+        peer.announce()
+        self.send_json({"ok": True, "data": {"discovery": True}})
+
+    @route("POST", r"/api/peer/exec")
+    def api_peer_exec(self, q):
+        """远端调过来的工具执行。对方必须持有本机 token 才走得到这里。"""
+        b = self.read_json()
+        name = str(b.get("tool") or "")
+        if name not in T.TOOL_NAMES:
+            raise ApiError(f"未知工具 {name}", 400)
+        # 禁止递归：A 调 B 的 peer_call，B 又调回 A，会无限套娃
+        if name in ("peer_call", "peer_list"):
+            raise ApiError("不允许远程嵌套调用互认工具", 400)
+        args = b.get("args") or {}
+        if not isinstance(args, dict):
+            raise ApiError("args 必须是对象")
+        r = T.dispatch(name, args, {"remote": True, "from": b.get("from") or ""})
+        self.send_json({"ok": True, "data": {"tool": name, "result": r}})
+
     # ================================================================ 杂项
     @route("GET", r"/api/desktop/state")
     def api_desktop_state(self, q):
@@ -755,6 +830,9 @@ def serve(host: str = "", port: int = 0, open_browser: bool = False) -> None:
         print("=" * 62)
         raise SystemExit(1) from e
     httpd.daemon_threads = True
+    # 局域网互认。失败只影响「自动发现」，手动填 IP 配对照常可用，
+    # 所以这里不 Checked —— 一台没有网卡的机器也必须能正常启动。
+    discover_ok = peer.start(port)
     real_host = host if host not in ("0.0.0.0", "::") else _lan_ip()
     url = f"http://{real_host}:{port}/"
     tok = cfg["auth"]["token"]
@@ -763,6 +841,12 @@ def serve(host: str = "", port: int = 0, open_browser: bool = False) -> None:
     print(f"  打开:  {url}")
     if host in ("0.0.0.0", "::"):
         print(f"  手机/平板: http://{_lan_ip()}:{port}/?token={tok}")
+    if discover_ok:
+        print(f"  局域网互认: 已开启（{peer.my_name()}，UDP {peer.UDP_PORT}）")
+    else:
+        print(f"  局域网互认: 未开启（{peer._err or '未知原因'}），可手动填 IP 配对")
+    if host not in ("0.0.0.0", "::", ""):
+        print("  注意: 只监听回环，别的设备连不上；跨设备请加 --host 0.0.0.0")
     print(f"  数据:  {config.DATA_DIR}")
     print(f"  停止:  Ctrl+C")
     print("=" * 62)
@@ -774,6 +858,7 @@ def serve(host: str = "", port: int = 0, open_browser: bool = False) -> None:
     except KeyboardInterrupt:
         print("\n正在退出…")
     finally:
+        peer.stop()
         SHELLS.close_all()
         httpd.server_close()
 

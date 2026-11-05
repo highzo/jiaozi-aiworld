@@ -201,6 +201,36 @@ curl -X POST http://127.0.0.1:8787/api/device/task \
 一块 8G 内存的 RK3588 跑 1.5B 模型 + 本服务，整机功耗十几瓦，离线可用。
 算力不够就两台串起来：一台跑模型当"大脑"，一台跑桌面/外设当"身体"，走同一个 API。
 
+### 局域网互认：几台机器变成一只手
+
+同一个 WiFi 下的饺子会互相看见（UDP 组播，5 秒一次）。配对不用记 IP、不用配密码：
+在一台上点「生成配对码」，在另一台把这 6 位数字填进去——之后就能跨设备调工具。
+
+配完之后，AI 多了两个工具：
+
+| 工具 | 干什么 |
+|---|---|
+| `peer_list` | 列出局域网里认得的所有设备、在线状态、能力 |
+| `peer_call` | 在指定设备上执行任意工具（读文件、跑命令、开窗口） |
+
+于是「用手机指挥电脑干活」这句话就不是比喻了：
+
+```
+你（对手机说）：看看客厅电脑桌面上的报告，把结论读给我
+饺子（手机）：peer_list → 找到"客厅电脑"
+              peer_call(device="客厅电脑", tool="fs_list", args={"path":"~/Desktop"})
+              peer_call(device="客厅电脑", tool="fs_read", args={"path":".../报告.md"})
+              → 读给你听
+```
+
+安全边界做在三个地方：
+
+- 配对码**一次性**、5 分钟过期、试错 6 次作废；
+- 跨设备调用用的是目标机自己的 token，**不是**一个万能钥匙；
+- `peer_call` 在审批名单里，`approval=auto` 下会先问你一句。
+
+组播被公共 WiFi 禁掉也不影响使用：填 IP + 配对码一样能连，只是自动发现那栏会一直空着。
+
 ---
 
 ## 项目结构
@@ -214,9 +244,10 @@ jiaozi-aiworld/
 │   ├── sysinfo.py        CPU/内存/磁盘/进程（Linux 读 /proc，Windows 走降级实现）
 │   ├── config.py         配置与运行时路径
 │   ├── eventbus.py       进程内事件总线（SSE 推送）
+│   ├── peer.py           局域网互认：组播发现、配对码、跨设备调用
 │   ├── agent/
 │   │   ├── llm.py        OpenAI 兼容客户端（流式 + tool_calls 增量拼装 + 本地代理绕过）
-│   │   ├── tools.py      13 个工具的定义与调度
+│   │   ├── tools.py      15 个工具的定义与调度
 │   │   ├── loop.py       Agent 循环、双协议、审批、上下文裁剪
 │   │   └── prompts.py    提示词
 │   └── desktop/          前端（无框架、无构建）
@@ -228,7 +259,7 @@ jiaozi-aiworld/
 │           ├── wm.js       窗口管理器
 │           ├── shell.js    桌面外壳：图标/任务栏/开始菜单/通知
 │           ├── agent.js    AI 面板
-│           └── apps/       6 个内置应用
+│           └── apps/       7 个内置应用（含「设备」）
 ├── scripts/              安装、安卓、kiosk、模型
 ├── tests/                冒烟测试、VT 单测、界面 E2E
 └── docs/                 架构、安装、开发板、API、模型
@@ -243,11 +274,12 @@ jiaozi-aiworld/
 ```bash
 python3 tests/smoke_test.py     # 57 项：HTTP、沙箱、终端、Agent 循环、审批、设备、图像、鉴权
 node tests/vt_test.js           # 24 项：VT 解析、颜色、光标、宽字符、HTML 转义
-python3 tests/ui_test.py        # 40 项：真实浏览器加载、点开应用、真敲键盘、手机竖屏、设置页、截图
+python3 tests/ui_test.py        # 48 项：真实浏览器加载、点开应用、真敲键盘、设备配对、手机竖屏、截图
+python3 tests/peer_test.py      # 40 项：两个真实进程互相发现、配对、跨设备执行、重启后身份不变
 python3 tests/image_e2e.py      # 8 项：真模型 + 真浏览器，让 AI 现场画两张图（会花额度，单独跑）
 ```
 
-累计 **129 项断言**。前三个不花钱、不需要联网，可以直接进 CI；
+累计 **169 项断言**。前四个不花钱、不需要联网，可以直接进 CI；
 `image_e2e.py` 会真的调用图像模型，所以和常规回归分开。
 
 `smoke_test.py` 内置了一个假的 OpenAI 兼容模型服务，所以**没有真模型也能验证完整 Agent 链路**：

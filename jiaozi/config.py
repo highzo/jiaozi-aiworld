@@ -97,6 +97,16 @@ DEFAULTS: dict = {
         #: 给机器人/外部设备调用的简单任务接口开关
         "enabled": True,
     },
+    "peer": {
+        #: 局域网互认：手机、电脑、机器人、ESP 互相发现并调用
+        "enabled": True,
+        #: 关掉组播发现（公共 WiFi 常禁），仍可手动填 IP + 配对码
+        "discovery": True,
+        #: 设备名，留空用主机名
+        "name": "",
+        #: 组播端口，和 HTTP 端口错开
+        "udp_port": 8788,
+    },
 }
 
 

@@ -4,12 +4,13 @@
   const JZ = window.JZ;
   const esc = JZ.esc;
 
-  const PINNED = ['files', 'terminal', 'editor', 'monitor', 'settings'];
+  const PINNED = ['files', 'terminal', 'editor', 'monitor', 'devices', 'settings'];
   const DESK_ICONS = [
     { app: 'files', label: '文件' },
     { app: 'terminal', label: '终端' },
     { app: 'editor', label: '编辑器' },
     { app: 'monitor', label: '监视器' },
+    { app: 'devices', label: '设备' },
     { app: 'settings', label: '设置' },
     { app: '__ai', label: '饺子 AI' },
   ];
