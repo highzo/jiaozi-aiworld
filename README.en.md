@@ -165,7 +165,8 @@ python3 tools/i18n_check.py --strict  # fail below the threshold (50% by default
 
 ## What the AI can actually do
 
-Not "it can chat" — **it can act**. Thirteen built-in tools, all going through the same backend endpoints a human uses:
+Not "it can chat" — **it can act**. Fifteen built-in tools, all going through the same
+backend endpoints a human uses (the 13 below, plus two for LAN peering covered later):
 
 | Tool | Purpose | Dangerous |
 |---|---|---|
@@ -331,7 +332,7 @@ python3 tools/i18n_check.py     # 9 dictionaries: parseable, no orphans, placeho
 
 These tests are not decoration — they have caught real bugs (see the end of `docs/ARCHITECTURE.md`).
 
-**Verified:** service on Linux/Windows, sandbox escape rejection, PTY and pipe terminals, dual-protocol agent, approval blocking, dark theme, window drag/resize/maximise, 8 apps, phone/PC same-origin access, phone portrait layout, 10-language switching.
+**Verified:** service on Linux/Windows, sandbox escape rejection, PTY and pipe terminals, dual-protocol agent, approval blocking, dark theme, window drag/resize/maximise, 7 apps, phone/PC same-origin access, phone portrait layout, 10-language switching.
 
 **Not yet verified (needs your hardware):** retail Android devices, Raspberry Pi / RK3588 boards, multi-step task success rates with real small models, touch gestures, stability beyond 24 hours. I will not claim those "definitely work"; the docs state the expectations and the risks.
 
