@@ -252,6 +252,13 @@ def main() -> int:
             return path
 
         print("\n[UI-1] 桌面加载")
+        # 先把界面语言钉成中文。
+        # 下面这套断言都是按中文写的，而语言默认是"跟着浏览器走"的：
+        # 开发机上是 zh-CN，CI 上的无头 Chrome 是 en-US，同一份代码在一台
+        # 机器上全绿、在另一台上红三条——不是功能坏了，是断言没定住前提。
+        # 多语言本身由 [UI-8] 专门测，那里会真切到德语再切回来。
+        goto(URL, 2.0)
+        js("try{localStorage.setItem('jz.lang','zh-CN')}catch(e){}")
         goto(URL, 3.5)
         ok("标题正确", js("document.title") in ("饺子AIWorld", "Jiaozi AI World"),
            js("document.title"))
@@ -367,9 +374,13 @@ def main() -> int:
         code_txt = js("(function(){var e=document.querySelector('.dc-num');"
                       "return e?e.textContent.trim():'';})()")
         ok("弹出 6 位配对码", bool(code_txt) and len(code_txt) == 6 and code_txt.isdigit(), code_txt)
+        # 不匹配"剩余"这两个字：文案是翻译过的，换个语言就失配。
+        # 要验的是"有一行带数字的倒计时说明"，不是它用哪种语言写的。
         ok("配对码带倒计时说明", bool(js(
             "(function(){var e=document.querySelector('.dc-tip');"
-            "return e&&/剩余/.test(e.textContent);})()")))
+            "if(!e) return false;var t=e.textContent||'';"
+            "return t.length>6 && /\\d/.test(t);})()")),
+           js("(document.querySelector('.dc-tip')||{}).textContent"))
         ok("设备列表有内容（空态也算）", (js("document.querySelectorAll('.dev-item, .dev .empty').length") or 0) > 0)
         ok("设备页无 JS 异常", not (js("window.__jzErrs") or []),
            (js("window.__jzErrs") or [])[:3])
@@ -414,10 +425,11 @@ def main() -> int:
         time.sleep(0.9)
         ok("可退回桌面", not js("document.body.classList.contains('ai-open')"))
 
-        # 真实点击（触摸模拟下走同一套 click 路径）打开文件管理器
+        # 真实点击（触摸模拟下走同一套 click 路径）打开文件管理器。
+        # 用 data-app 而不是按中文标题找按钮：标题是翻译过的，
+        # 换一门语言就再也匹配不上——这里要测的是"点得开"，不是"叫得对"。
         js("""(function(){
-            var el=[].slice.call(document.querySelectorAll('#tbApps .tb-app'))
-                     .filter(function(b){return /文件/.test(b.title||b.textContent);})[0];
+            var el=document.querySelector('#tbApps .tb-app[data-app="files"]');
             if(el){el.click();return 'clicked';} return 'not-found';
         })()""")
         time.sleep(2.0)

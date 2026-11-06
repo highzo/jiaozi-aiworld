@@ -15,7 +15,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.8", "3.12"]
+        # 代码本身兼容 3.8+，但现在的 runner 镜像（Ubuntu 26.04）已经装不上
+        # 3.8 了，actions/setup-python 会直接报 "not found for Ubuntu 26.04"。
+        # 所以这里测两端能装得上的版本：3.10（较旧）和 3.12（较新）。
+        python: ["3.10", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
