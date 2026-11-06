@@ -5,6 +5,8 @@
 
 简体中文 · [English](README.en.md)
 
+![CI](https://github.com/highzo/jiaozi-aiworld/actions/workflows/ci.yml/badge.svg) ![license](https://img.shields.io/badge/license-MIT-blue)
+
 ![桌面](docs/images/desktop.png)
 
 > 我们想做的事很简单：**让人、电脑、手机、机器人、各种设备都能自己跑模型。**

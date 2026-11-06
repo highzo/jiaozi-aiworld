@@ -5,6 +5,8 @@ One codebase, running on PCs, Android phones, and boards like Raspberry Pi / RK3
 
 [简体中文](README.md) · English
 
+![CI](https://github.com/highzo/jiaozi-aiworld/actions/workflows/ci.yml/badge.svg) ![license](https://img.shields.io/badge/license-MIT-blue)
+
 ![Desktop](docs/images/desktop.png)
 
 > What we are after is simple: **let people, computers, phones, robots and devices run models themselves.**

@@ -1,0 +1,113 @@
+name: CI
+
+# 这套测试不花钱、不联网、不需要真模型——smoke_test 自带一个假的
+# OpenAI 兼容服务，所以每次 push 都能把完整 Agent 链路跑一遍。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: 回归（Python ${{ matrix.python }}）
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.8", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: 语法与零依赖检查
+        run: |
+          python -m compileall -q jiaozi tests tools
+          python - <<'PY'
+          import importlib.util, pathlib, sys
+
+          # 项目承诺"只用标准库"。判断办法不是数模块名，而是看它到底
+          # 从哪儿被 import 出来的：只要不是 site-packages，就是标准库
+          # 或者项目自己的代码。
+          bad = []
+          for f in sorted(pathlib.Path("jiaozi").rglob("*.py")):
+              for line in f.read_text(encoding="utf-8").splitlines():
+                  s = line.strip()
+                  if not s.startswith(("import ", "from ")):
+                      continue
+                  mod = s.split()[1].split(".")[0]
+                  if not mod or mod == "jiaozi" or mod.startswith("_"):
+                      continue
+                  try:
+                      spec = importlib.util.find_spec(mod)
+                  except (ImportError, ValueError):
+                      continue
+                  if spec and spec.origin and "site-packages" in spec.origin:
+                      bad.append(f"{f}: {s}")
+          if bad:
+              print("\n".join(bad))
+              sys.exit("发现第三方依赖")
+          print("只用标准库 ✅")
+          PY
+
+      - name: 起服务
+        run: |
+          python -m jiaozi --host 127.0.0.1 --port 8787 > /tmp/jiaozi.log 2>&1 &
+          for i in $(seq 1 40); do
+            curl -sf http://127.0.0.1:8787/api/health > /dev/null && break
+            sleep 0.5
+          done
+          curl -sf http://127.0.0.1:8787/api/health | head -c 200; echo
+
+      - name: 冒烟测试（HTTP / 沙箱 / 终端 / Agent / 审批 / 图像 / 鉴权）
+        run: python tests/smoke_test.py
+
+      - name: 终端 VT 解析
+        run: node tests/vt_test.js
+
+      - name: 词典校验
+        run: python tools/i18n_check.py --strict
+
+      - name: 局域网互认（两个真实进程）
+        run: python tests/peer_test.py
+
+      - name: 失败时打印服务端日志
+        if: failure()
+        run: tail -120 /tmp/jiaozi.log
+
+  ui:
+    name: 界面 E2E（真实 Chrome）
+    runs-on: ubuntu-latest
+    # 无头 Chrome 在 CI 上偶发抽风（profile 锁、沙箱），先当参考项，
+    # 不阻塞合并；本地跑这条永远应该是绿的。
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 起服务
+        run: |
+          python -m jiaozi --host 127.0.0.1 --port 8787 > /tmp/jiaozi.log 2>&1 &
+          for i in $(seq 1 40); do
+            curl -sf http://127.0.0.1:8787/api/health > /dev/null && break
+            sleep 0.5
+          done
+
+      - name: 界面测试
+        env:
+          JIAOZI_URL: http://127.0.0.1:8787
+        run: python tests/ui_test.py
+
+      - name: 截图留档
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shots
+          path: tests/shots/
+          if-no-files-found: ignore
