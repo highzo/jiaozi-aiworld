@@ -11,14 +11,14 @@
       root.innerHTML =
         '<div class="app">' +
           '<div class="app-bar">' +
-            '<button class="btn sm" data-a="save">' + JZ.icon('save', 14) + '保存</button>' +
-            '<button class="btn sm" data-a="saveas">另存为</button>' +
-            '<button class="btn sm" data-a="reload">重新载入</button>' +
+            '<button class="btn sm" data-a="save">' + JZ.icon('save', 14) + esc(JZ.t('保存')) + '</button>' +
+            '<button class="btn sm" data-a="saveas">' + esc(JZ.t('另存为')) + '</button>' +
+            '<button class="btn sm" data-a="reload">' + esc(JZ.t('重新载入')) + '</button>' +
             '<div style="flex:1"></div>' +
             '<span class="tag" data-role="enc">UTF-8</span>' +
           '</div>' +
           '<div class="ed"><div class="ed-gutter">1</div><textarea class="ed-area" spellcheck="false"></textarea></div>' +
-          '<div class="app-status"><span data-role="pos">行 1，列 1</span><span data-role="cnt"></span>' +
+          '<div class="app-status"><span data-role="pos">' + esc(JZ.t('行 1，列 1')) + '</span><span data-role="cnt"></span>' +
             '<span class="grow"></span><span data-role="path"></span></div>' +
         '</div>';
 
@@ -34,7 +34,7 @@
 
       function setDirty(v) {
         dirty = v;
-        win.setTitle((dirty ? '● ' : '') + (path ? path.split(/[\\/]/).pop() : '未命名') + ' — 编辑器');
+        win.setTitle((dirty ? '● ' : '') + (path ? path.split(/[\\/]/).pop() : JZ.t('未命名')) + ' — ' + JZ.t('编辑器'));
       }
 
       function renderGutter() {
@@ -48,14 +48,14 @@
         gutter.scrollTop = area.scrollTop;
         const chars = area.value.length;
         const words = (area.value.match(/[\u4e00-\u9fa5]|[A-Za-z0-9_]+/g) || []).length;
-        cntEl.textContent = lines + ' 行 · ' + chars + ' 字符 · ' + words + ' 词';
+        cntEl.textContent = JZ.t('{lines} 行 · {chars} 字符 · {words} 词', { lines: lines, chars: chars, words: words });
       }
 
       function updatePos() {
         const upto = area.value.slice(0, area.selectionStart);
         const line = upto.split('\n').length;
         const col = upto.length - upto.lastIndexOf('\n');
-        posEl.textContent = '行 ' + line + '，列 ' + col;
+        posEl.textContent = JZ.t('行 {line}，列 {col}', { line: line, col: col });
         renderGutter();
       }
 
@@ -68,11 +68,11 @@
           area.value = d.text;
           setDirty(false);
           pathEl.textContent = d.path;
-          encEl.textContent = d.binary ? '含二进制' : (d.encoding || 'UTF-8');
-          if (d.truncated) JZ.toast('文件较大已截断', '仅载入前部分内容，保存会覆盖全文', 'warn');
+          encEl.textContent = d.binary ? JZ.t('含二进制') : (d.encoding || 'UTF-8');
+          if (d.truncated) JZ.toast(JZ.t('文件较大已截断'), JZ.t('仅载入前部分内容，保存会覆盖全文'), 'warn');
           updatePos();
         } catch (e) {
-          JZ.toast('打开失败', e.message, 'err');
+          JZ.toast(JZ.t('打开失败'), e.message, 'err');
         }
       }
 
@@ -82,15 +82,15 @@
           await JZ.api.post('/api/fs/write', { path: path, content: area.value });
           loadedText = area.value;
           setDirty(false);
-          JZ.toast('已保存', path.split(/[\\/]/).pop(), 'ok', 1600);
-        } catch (e) { JZ.toast('保存失败', e.message, 'err'); }
+          JZ.toast(JZ.t('已保存'), path.split(/[\\/]/).pop(), 'ok', 1600);
+        } catch (e) { JZ.toast(JZ.t('保存失败'), e.message, 'err'); }
       }
 
       async function saveAs() {
         const base = JZ.state.home || '';
         const s = base.indexOf('\\') >= 0 ? '\\' : '/';
         const def = path || (base.replace(/[\\/]$/, '') + s + 'untitled.txt');
-        const p = await JZ.prompt('另存为', def, '输入完整路径');
+        const p = await JZ.prompt(JZ.t('另存为'), def, JZ.t('输入完整路径'));
         if (!p) return;
         path = p;
         pathEl.textContent = p;
@@ -101,7 +101,7 @@
       root.querySelector('[data-a="saveas"]').onclick = saveAs;
       root.querySelector('[data-a="reload"]').onclick = async function () {
         if (dirty) {
-          const ok = await JZ.confirm('放弃未保存的修改？', '重新载入会用磁盘上的内容覆盖当前编辑。', true);
+          const ok = await JZ.confirm(JZ.t('放弃未保存的修改？'), JZ.t('重新载入会用磁盘上的内容覆盖当前编辑。'), true);
           if (!ok) return;
         }
         load(path);
@@ -126,10 +126,10 @@
       });
 
       win.onClose = function () {
-        if (dirty) JZ.toast('窗口已关闭', '未保存的修改已丢弃', 'warn');
+        if (dirty) JZ.toast(JZ.t('窗口已关闭'), JZ.t('未保存的修改已丢弃'), 'warn');
       };
 
-      pathEl.textContent = path || '未命名';
+      pathEl.textContent = path || JZ.t('未命名');
       if (path) load(path); else { setDirty(false); updatePos(); }
       setTimeout(function () { area.focus(); }, 60);
     },

@@ -297,6 +297,52 @@ UDP 组播到 `239.255.77.87:8788`，每 5 秒一条 JSON。每张网卡各发�
 
 ---
 
+## 多语言
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/i18n` | 当前语言、判定来源、支持列表。**不会主动去查 IP** |
+| POST | `/api/i18n` | 改语言：`{"lang":"de"}` 或 `{"lang":"auto"}` |
+| GET | `/api/geo` | IP 归属地：`?ip=` 指定地址，`?refresh=1` 绕过 6 小时缓存 |
+| GET | `/i18n/<code>.json` | 词典本体（静态文件，缺失就是 404） |
+
+`GET /api/i18n` 的返回：
+
+```json
+{"ok": true, "data": {
+  "lang": "de", "source": "browser", "country": "",
+  "default": "en",
+  "langs": [{"code": "de", "native": "Deutsch", "en": "German"}, ...]
+}}
+```
+
+`source` 有四种，前端就是靠它告诉用户"这次是为什么变成这个语言的"：
+
+| source | 含义 |
+|---|---|
+| `user` | 用户自己选的 |
+| `browser` | 按 `Accept-Language`（取 q 值最高且我们支持的那个） |
+| `ip` | 按 IP 归属地推的 |
+| `default` | 以上都不成立，回落英文 |
+
+`GET /api/geo` 的返回：
+
+```json
+{"ok": true, "data": {
+  "ok": true, "ip": "1.2.3.4", "country_code": "CN",
+  "country": "China", "city": "Yiwu", "source": "ip.sb",
+  "suggest": "zh-CN", "cached": false, "ts": 1793925825
+}}
+```
+
+- 对端是回环/内网地址时（手机通过局域网连进来就是 `192.168.x.x`），
+  查的是**服务器自己的出口 IP**——内网地址推不出国家；
+- 三家 provider 依次回退（`api.ip.sb` → `ipwho.is` → `ipinfo.io`），单次超时 3 秒，
+  整次请求总预算 4.5 秒，**永远不抛异常**，最坏情况返回 `{"ok": false}`；
+- 结果在磁盘上缓存 6 小时（`~/.jiaozi/geo.json`），失败也会缓存，避免每秒钟重试。
+
+---
+
 ## 桌面操作（给外部程序用）
 
 ```bash

@@ -34,7 +34,7 @@
     </svg>
   </div>
   <div class="boot-name">饺子<span>AIWorld</span></div>
-  <div class="boot-tip" id="bootTip">正在唤醒桌面…</div>
+  <div class="boot-tip" id="bootTip" data-i18n="正在唤醒桌面…">正在唤醒桌面…</div>
   <div class="boot-bar"><i></i></div>
 </div>
 
@@ -55,46 +55,46 @@
       <span class="ai-orb"></span>
       <div>
         <b>饺子</b>
-        <small id="aiModel">未连接</small>
+        <small id="aiModel" data-i18n="未连接">未连接</small>
       </div>
     </div>
     <div class="ai-head-btns">
-      <button class="ibtn" id="aiNew" title="新对话" data-icon="plus"></button>
-      <button class="ibtn" id="aiCfg" title="模型设置" data-icon="sliders"></button>
-      <button class="ibtn" id="aiClose" title="收起" data-icon="chevrons-right"></button>
+      <button class="ibtn" id="aiNew" title="新对话" data-i18n-title="新对话" data-icon="plus"></button>
+      <button class="ibtn" id="aiCfg" title="模型设置" data-i18n-title="模型设置" data-icon="sliders"></button>
+      <button class="ibtn" id="aiClose" title="收起" data-i18n-title="收起" data-icon="chevrons-right"></button>
     </div>
   </header>
   <div class="ai-body" id="aiBody">
     <div class="ai-empty" id="aiEmpty">
       <div class="ai-empty-orb"></div>
-      <h3>我是饺子，住在这台机器里</h3>
-      <p>我能看见你的文件、运行命令、打开窗口。<br>我们用的是同一个桌面。</p>
+      <h3 data-i18n="我是饺子，住在这台机器里">我是饺子，住在这台机器里</h3>
+      <p data-i18n-html="我能看见你的文件、运行命令、打开窗口。<br>我们用的是同一个桌面。">我能看见你的文件、运行命令、打开窗口。<br>我们用的是同一个桌面。</p>
       <div class="chips" id="aiChips"></div>
     </div>
   </div>
   <footer class="ai-foot">
     <div class="ai-input-wrap">
-      <textarea id="aiInput" rows="1" placeholder="让饺子做点什么…（Enter 发送，Shift+Enter 换行）"></textarea>
-      <button id="aiSend" class="ai-send" data-icon="send" title="发送"></button>
+      <textarea id="aiInput" rows="1" placeholder="让饺子做点什么…（Enter 发送，Shift+Enter 换行）" data-i18n-ph="让饺子做点什么…（Enter 发送，Shift+Enter 换行）"></textarea>
+      <button id="aiSend" class="ai-send" data-icon="send" title="发送" data-i18n-title="发送"></button>
     </div>
-    <div class="ai-hint"><span id="aiStatus">就绪</span><span class="dot-sep">·</span><span id="aiSteps"></span></div>
+    <div class="ai-hint"><span id="aiStatus" data-i18n="就绪">就绪</span><span class="dot-sep">·</span><span id="aiSteps"></span></div>
   </footer>
 </aside>
 
 <!-- ============ 任务栏 ============ -->
 <div id="taskbar">
   <div class="tb-left">
-    <button id="startBtn" class="tb-start" title="开始">
+    <button id="startBtn" class="tb-start" title="开始" data-i18n-title="开始">
       <svg viewBox="0 0 24 24" width="20" height="20"><rect x="3" y="3" width="8" height="8" rx="2.2" fill="currentColor"/><rect x="13" y="3" width="8" height="8" rx="2.2" fill="currentColor" opacity=".72"/><rect x="3" y="13" width="8" height="8" rx="2.2" fill="currentColor" opacity=".72"/><rect x="13" y="13" width="8" height="8" rx="2.2" fill="currentColor" opacity=".5"/></svg>
     </button>
     <div class="tb-search" id="tbSearch">
-      <span data-icon="search"></span><input id="tbSearchInput" placeholder="搜索应用和文件"><kbd>Ctrl K</kbd>
+      <span data-icon="search"></span><input id="tbSearchInput" placeholder="搜索应用和文件" data-i18n-ph="搜索应用和文件"><kbd>Ctrl K</kbd>
     </div>
   </div>
   <div class="tb-center" id="tbApps"></div>
   <div class="tb-right">
-    <button class="tb-tray" id="trayAi" title="AI 面板"><span class="tray-orb"></span></button>
-    <button class="tb-tray" id="trayBell" data-icon="bell" title="通知"></button>
+    <button class="tb-tray" id="trayAi" title="AI 面板" data-i18n-title="AI 面板"><span class="tray-orb"></span></button>
+    <button class="tb-tray" id="trayBell" data-icon="bell" title="通知" data-i18n-title="通知"></button>
     <div class="tb-sys" id="traySys">
       <span data-icon="cpu"></span><span id="trayCpu">–</span>
     </div>
@@ -104,28 +104,29 @@
 
 <!-- ============ 开始菜单 ============ -->
 <div id="startMenu" class="start-menu">
-  <div class="sm-search"><span data-icon="search"></span><input id="smSearch" placeholder="搜索应用、文件或问 AI"></div>
-  <div class="sm-section">应用</div>
+  <div class="sm-search"><span data-icon="search"></span><input id="smSearch" placeholder="搜索应用、文件或问 AI" data-i18n-ph="搜索应用、文件或问 AI"></div>
+  <div class="sm-section" data-i18n="应用">应用</div>
   <div class="sm-grid" id="smApps"></div>
-  <div class="sm-section">AI 快捷指令</div>
+  <div class="sm-section" data-i18n="AI 快捷指令">AI 快捷指令</div>
   <div class="sm-quick" id="smQuick"></div>
   <div class="sm-foot">
-    <div class="sm-user"><span class="avatar" id="smAvatar">J</span><div><b id="smHost">本机</b><small>离线可用</small></div></div>
+    <div class="sm-user"><span class="avatar" id="smAvatar">J</span><div><b id="smHost">本机</b><small data-i18n="离线可用">离线可用</small></div></div>
     <div class="sm-power">
-      <button data-icon="settings" id="smSettings" title="设置"></button>
-      <button data-icon="power" id="smPower" title="关闭页面"></button>
+      <button data-icon="settings" id="smSettings" title="设置" data-i18n-title="设置"></button>
+      <button data-icon="power" id="smPower" title="关闭页面" data-i18n-title="关闭页面"></button>
     </div>
   </div>
 </div>
 
 <!-- ============ 通知 / 弹层 ============ -->
 <div id="toasts"></div>
-<div id="notifPanel" class="notif-panel"><div class="np-head">通知</div><div id="npList" class="np-list"></div></div>
+<div id="notifPanel" class="notif-panel"><div class="np-head" data-i18n="通知">通知</div><div id="npList" class="np-list"></div></div>
 <div id="ctxMenu" class="ctx-menu"></div>
 <div id="modalHost" class="modal-host"></div>
 <div id="toastQuick" class="toast-quick"></div>
 
 <script src="js/core.js"></script>
+<script src="js/i18n.js"></script>
 <script src="js/vt.js"></script>
 <script src="js/wm.js"></script>
 <script src="js/apps/files.js"></script>

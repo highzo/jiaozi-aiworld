@@ -354,6 +354,26 @@ def test_device():
     ok("设备一句话任务", st == 200 and j.get("ok") and j.get("result"),
        j.get("error") or j.get("result"))
 
+    # 长连接回归：接口不用参数、前端却照样带 `{}` 发 POST 时，没读完的
+    # body 会留在 socket 里，下一个请求的头一行变成 `{}GET /api/health`，
+    # 服务端回 501，这条连接从此废掉。设备页每秒轮询正好踩中过。
+    c = http.client.HTTPConnection(HOST, PORT, timeout=10)
+    try:
+        c.request("POST", "/api/peer/code", body=b"{}",
+                  headers={"Content-Type": "application/json"})
+        r1 = c.getresponse()
+        s1 = r1.status
+        r1.read()
+        c.request("GET", "/api/health")
+        r2 = c.getresponse()
+        s2 = r2.status
+        r2.read()
+    except Exception as e:  # noqa: BLE001
+        s1 = s2 = f"异常 {e}"
+    finally:
+        c.close()
+    ok("未读 body 不污染长连接", s1 == 200 and s2 == 200, f"POST={s1} 随后 GET={s2}")
+
 
 def raw(method, path, headers=None, body=None):
     """底层请求：用来验证 token / cookie 这类靠头部的行为。"""

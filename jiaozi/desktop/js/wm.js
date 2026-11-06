@@ -33,9 +33,9 @@
         '<div class="win-ico" style="background:' + (app.color || '#2f6bff') + '">' + JZ.icon(app.icon, 13) + '</div>' +
         '<div class="win-title">' + JZ.esc(win.title) + '</div>' +
         '<div class="win-tools">' +
-          '<button class="wbtn min" title="最小化"><svg viewBox="0 0 24 24" width="12" height="12"><path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>' +
-          '<button class="wbtn max" title="最大化"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></button>' +
-          '<button class="wbtn close" title="关闭"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
+          '<button class="wbtn min" title="最小化" data-i18n-title="最小化"><svg viewBox="0 0 24 24" width="12" height="12"><path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>' +
+          '<button class="wbtn max" title="最大化" data-i18n-title="最大化"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></button>' +
+          '<button class="wbtn close" title="关闭" data-i18n-title="关闭"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
         '</div>' +
       '</div>' +
       '<div class="win-body"></div>' +
@@ -174,7 +174,7 @@
 
   WM.open = function (appId, args) {
     const app = JZ.apps[appId];
-    if (!app) { JZ.toast('应用不存在', appId, 'err'); return null; }
+    if (!app) { JZ.toast(JZ.t('应用不存在'), appId, 'err'); return null; }
     if (app.singleton) {
       for (const w of WM.wins.values()) {
         if (w.appId === appId) {
@@ -231,7 +231,7 @@
     } catch (e) {
       console.error(e);
       win.el.querySelector('.win-body').innerHTML =
-        '<div class="empty">' + JZ.icon('alert-triangle', 36) + '<div>应用启动失败：' + JZ.esc(e.message) + '</div></div>';
+        '<div class="empty">' + JZ.icon('alert-triangle', 36) + '<div>' + JZ.esc(JZ.t('应用启动失败：') + e.message) + '</div></div>';
     }
     JZ.emit('windows:change');
     JZ.emit('window:open', win);

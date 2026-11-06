@@ -11,9 +11,9 @@
     mount: function (root, win, args) {
       root.innerHTML =
         '<div class="app" style="background:#0c1119">' +
-          '<div class="term-tabbar"><span class="dot"></span><span class="tt-title">本地终端</span>' +
+          '<div class="term-tabbar"><span class="dot"></span><span class="tt-title">' + esc(JZ.t('本地终端')) + '</span>' +
             '<span class="sp"></span><span class="tt-size">—</span>' +
-            '<button data-t="clear">清屏</button><button data-t="restart">重启</button>' +
+            '<button data-t="clear">' + esc(JZ.t('清屏')) + '</button><button data-t="restart">' + esc(JZ.t('重启')) + '</button>' +
           '</div>' +
           '<div class="term-wrap">' +
             '<div class="term-screen"><div class="term-content">' +
@@ -162,7 +162,7 @@
           outBusy = false;
           screen.__tty = r.tty;
           sizeEl.textContent = sz.cols + '×' + sz.rows;
-          win.setTitle('终端 — ' + String(r.shell || '').split(/[\\/]/).pop());
+          win.setTitle(JZ.t('终端') + ' — ' + String(r.shell || '').split(/[\\/]/).pop());
           if (args.cwd) {
             setTimeout(function () {
               send('cd "' + String(args.cwd).replace(/"/g, '\\"') + '"' + (r.tty ? '\n' : '\r'));
@@ -172,7 +172,7 @@
           scroller.scrollTop = scroller.scrollHeight;
           inputEl.focus();
         } catch (e) {
-          histEl.innerHTML = '<div class="term-line"><span style="color:#ff6b6b">启动终端失败：' +
+          histEl.innerHTML = '<div class="term-line"><span style="color:#ff6b6b">' + esc(JZ.t('启动终端失败：')) + '' +
             esc(e.message) + '</span></div>';
           histCount = 1;
         }
@@ -212,7 +212,7 @@
       const offClose = JZ.on('ev:term_close', function (ev) {
         if (sid && ev.id === sid) {
           histEl.insertAdjacentHTML('beforeend',
-            '<div class="term-line"><span style="color:#6f8199">— 会话已结束 —</span></div>');
+            '<div class="term-line"><span style="color:#6f8199">— ' + esc(JZ.t('会话已结束')) + ' —</span></div>');
           histCount++;
           sid = null;
           cursorEl.style.display = 'none';

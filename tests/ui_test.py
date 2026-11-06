@@ -15,6 +15,7 @@ import glob
 import json
 import os
 import random
+import shutil
 import socket
 import struct
 import subprocess
@@ -23,6 +24,15 @@ import tempfile
 import time
 import urllib.request
 from base64 import b64encode
+
+# 本机回环请求绝不能被送进 HTTP 代理。
+# 开发机上常开着 http_proxy（翻墙/抓包），no_proxy 又往往是空的，
+# 结果 127.0.0.1:9333 也走代理 → 调试端口"起不来"，实际是查找不到自己。
+for _k in ("no_proxy", "NO_PROXY"):
+    _hosts = {h.strip() for h in os.environ.get(_k, "").split(",") if h.strip()}
+    _hosts |= {"127.0.0.1", "localhost", "::1", "0.0.0.0"}
+    os.environ[_k] = ",".join(sorted(_hosts))
+_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 URL = os.environ.get("JIAOZI_URL", "http://127.0.0.1:8787").rstrip("/") + "/"
 PORT = int(os.environ.get("CDP_PORT", "9333"))
@@ -147,11 +157,28 @@ class WS:
             pass
 
 
-def wait_cdp(timeout=20.0):
+def reset_profile(path):
+    """清掉上一轮留下的 SingletonLock。
+
+    Chrome 的进程单例是按 user-data-dir 认的：上一轮被 kill -9 之后
+    目录里会留着锁，下一次启动以为"已有会话在跑"，把命令转交出去然后
+    自己退出（退出码 21，没有任何输出）。表现就是"调试端口起不来"。
+    这个目录是本测试自己建的，删掉是安全的。
+    """
+    if os.path.isdir(path):
+        shutil.rmtree(path, ignore_errors=True)
+    os.makedirs(path, exist_ok=True)
+
+
+def wait_cdp(timeout=20.0, proc=None, log_path=""):
     end = time.time() + timeout
     while time.time() < end:
+        # 浏览器自己先挂了就别干等到超时，直接把退出码和日志尾巴报出来。
+        if proc is not None and proc.poll() is not None:
+            raise RuntimeError(
+                "Chrome 启动即退出（代码 %s）\n%s" % (proc.returncode, _tail(log_path)))
         try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{PORT}/json/list", timeout=2) as r:
+            with _OPENER.open(f"http://127.0.0.1:{PORT}/json/list", timeout=2) as r:
                 data = json.loads(r.read())
             pages = [t for t in data if t.get("type") == "page"]
             if pages:
@@ -159,7 +186,15 @@ def wait_cdp(timeout=20.0):
         except Exception:
             pass
         time.sleep(0.3)
-    raise RuntimeError("Chrome 调试端口没起来")
+    raise RuntimeError("Chrome 调试端口没起来（端口 %d）\n%s" % (PORT, _tail(log_path)))
+
+
+def _tail(path, n=2500):
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()[-n:]
+    except OSError:
+        return "(无日志)"
 
 
 def main() -> int:
@@ -172,15 +207,18 @@ def main() -> int:
         return 1
 
     prof = os.path.join(tempfile.gettempdir(), "jz_cdp_profile")
+    reset_profile(prof)
+    blog = os.path.join(tempfile.gettempdir(), "jz_cdp_stderr.log")
+    _blog = open(blog, "w", encoding="utf-8", errors="replace")
     proc = subprocess.Popen([
         exe, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
         f"--remote-debugging-port={PORT}", f"--user-data-dir={prof}",
         "--window-size=1440,900", "--hide-scrollbars", "about:blank",
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    ], stdout=subprocess.DEVNULL, stderr=_blog)
 
     ws = None
     try:
-        page = wait_cdp()
+        page = wait_cdp(proc=proc, log_path=blog)
         ws = WS(page["webSocketDebuggerUrl"], timeout=40)
         ws.call("Page.enable")
         ws.call("Runtime.enable")
@@ -215,7 +253,8 @@ def main() -> int:
 
         print("\n[UI-1] 桌面加载")
         goto(URL, 3.5)
-        ok("标题正确", js("document.title") == "饺子AIWorld")
+        ok("标题正确", js("document.title") in ("饺子AIWorld", "Jiaozi AI World"),
+           js("document.title"))
         ok("已离开开机画面", js("!document.body.classList.contains('booting')"))
         ok("桌面图标渲染", (js("document.querySelectorAll('#icons .dicon').length") or 0) >= 6,
            js("document.querySelectorAll('#icons .dicon').length"))
@@ -416,6 +455,94 @@ def main() -> int:
         shot("11-mobile-term.png")
         ws.call("Emulation.clearDeviceMetricsOverride")
         ws.call("Emulation.setTouchEmulationEnabled", {"enabled": False})
+
+        # ----------------------------------------------------------
+        # 多语言：这块最容易「看着对、其实是旧的」——切了语言但界面
+        # 还是原文，或者翻了一半半边中文。所以断言必须落到真实文字上，
+        # 不能只看 lang 变量。
+        print("\n[UI-8] 多语言")
+        goto(URL, 3.0)
+        langs = js("JZ.i18n.supported") or []
+        ok("支持 10 种语言", len(langs) >= 10, langs)
+        ok("语言有明确来源（用户/浏览器/IP/默认）",
+           (js("JZ.i18n.meta.source") or "") in ("user", "browser", "ip", "default"),
+           js("JZ.i18n.meta.source"))
+
+        js("JZ.i18n.setLang('de')")
+        time.sleep(3.2)
+        ok("切德语后语言标记正确", js("JZ.i18n.lang") == "de", js("JZ.i18n.lang"))
+        ok("html[lang] 跟着变", js("document.documentElement.lang") == "de")
+        ok("代码里的文案真的变德文", js("JZ.t('文件')") == "Dateien", js("JZ.t('文件')"))
+        # 静态 HTML 里有三种标记：正文、title、placeholder。
+        # 三种走的不是同一段代码，少测一种就可能漏掉整类元素。
+        ok("静态 HTML 正文翻了（应用 → Apps）",
+           js("(function(){var e=document.querySelector('[data-i18n=\\'应用\\']');"
+              "return !!e && e.textContent===JZ.t('应用') && e.textContent!=='应用';})()") is True,
+           js("(document.querySelector('[data-i18n=\\'应用\\']')||{}).textContent"))
+        ok("静态 HTML 的 title 翻了",
+           js("(function(){var e=document.querySelector('[data-i18n-title=\\'设置\\']');"
+              "return !!e && e.title===JZ.t('设置') && e.title!=='设置';})()") is True,
+           js("(document.querySelector('[data-i18n-title=\\'设置\\']')||{}).title"))
+        # 断言不写死译文：词典随时会被改短（德文长词挤不进搜索框），
+        # 只要"渲染出来的值 == 词典里的值，且不等于中文原文"就说明这条路通了。
+        ok("静态 HTML 的 placeholder 翻了",
+           js("(function(){var e=document.querySelector('[data-i18n-ph=\\'搜索应用和文件\\']');"
+              "if(!e) return false;"
+              "return e.placeholder===JZ.t('搜索应用和文件') && e.placeholder!=='搜索应用和文件';})()")
+           is True,
+           js("(document.querySelector('[data-i18n-ph=\\'搜索应用和文件\\']')||{}).placeholder"))
+        ok("德语界面无 JS 异常", not (js("window.__jzErrs") or []),
+           (js("window.__jzErrs") or [])[:3])
+        shot("12-lang-de.png")
+
+        # 缺译、词典 404 这些边角，出问题都是白屏或一串 key
+        ok("缺译回落中文原文，不显示空白",
+           js("JZ.t('这条肯定没人翻过')") == "这条肯定没人翻过")
+        ok("占位符插值正常", js("JZ.t('{n} 分钟前',{n:3})") == "vor 3 Min.",
+           js("JZ.t('{n} 分钟前',{n:3})"))
+        ok("词典取不到时给空表、不抛错",
+           js("JZ.i18n.load('xx-YY').then(function(d){return Object.keys(d).length===0})"
+              ".catch(function(){return false})") is True)
+
+        js("JZ.i18n.setLang('zh-CN')")
+        time.sleep(3.2)
+        ok("切回中文正常", js("JZ.i18n.lang") == "zh-CN" and js("JZ.t('文件')") == "文件",
+           js("JZ.t('文件')"))
+        ok("中文界面无 JS 异常", not (js("window.__jzErrs") or []),
+           (js("window.__jzErrs") or [])[:3])
+        shot("12b-lang-zh.png")
+
+        # 设置页的语言下拉：用户手动选语言的实际入口
+        js("JZ.WM.open('settings')")
+        time.sleep(1.2)
+        ok("设置里有「语言」页",
+           js("!!document.querySelector('.set-nav[data-tab=\\'lang\\']')") is True)
+        js("(function(){var b=document.querySelector('.set-nav[data-tab=\\'lang\\']');"
+           "if(b)b.click();return !!b;})()")
+        time.sleep(0.6)
+        nopt = js("(document.querySelector('[data-f=\\'language\\']')||{options:[]})"
+                  ".options.length") or 0
+        ok("语言下拉含「自动」+ 10 种语言", nopt >= 11, nopt)
+        ok("语言页显示当前语言是怎么定下来的",
+           bool(js("(document.querySelector('.lang-now')||{}).textContent")),
+           js("(document.querySelector('.lang-now')||{}).textContent"))
+        shot("13-lang-settings.png")
+
+        # 服务端接口：前端换语言要能被记住，重启后不该又跳回去
+        ok("服务端记得住语言选择",
+           js("fetch('/api/i18n',{method:'POST',headers:{'Content-Type':'application/json'},"
+              "body:JSON.stringify({lang:'ja'})}).then(function(r){return r.json()})"
+              ".then(function(j){return (j.data||j).lang})") == "ja")
+        ok("IP 归属地接口有回应（断网也不能崩）",
+           js("fetch('/api/geo').then(function(r){return r.json()})"
+              ".then(function(j){return typeof (j.data||j).ok === 'boolean'})"
+              ".catch(function(){return false})") is True)
+
+        # 归位：别把测试用的语言选择留在浏览器和配置里
+        js("fetch('/api/i18n',{method:'POST',headers:{'Content-Type':'application/json'},"
+           "body:JSON.stringify({lang:'auto'})})")
+        js("JZ.i18n.useAuto()")
+        time.sleep(2.0)
     finally:
         if ws:
             ws.close()
@@ -425,6 +552,10 @@ def main() -> int:
                 proc.wait(5)
             except subprocess.TimeoutExpired:
                 proc.kill()
+        try:
+            _blog.close()
+        except OSError:
+            pass
 
     total = len(PASS) + len(FAIL)
     print("\n" + "=" * 56)

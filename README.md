@@ -3,7 +3,14 @@
 **给 Linux 加一个像 Windows 一样的桌面，人和 AI 共用同一张桌子。**
 同一套代码跑在电脑、安卓手机、树莓派 / RK3588 这类开发板上；模型可以完全跑在本地，断网也能干活。
 
+简体中文 · [English](README.en.md)
+
 ![桌面](docs/images/desktop.png)
+
+> 我们想做的事很简单：**让人、电脑、手机、机器人、各种设备都能自己跑模型。**
+> 不是把请求发到某朵云上再等一句话回来，而是把"脑子"装进设备里——
+> 机器人能自己看、自己动手，设备断了网也还是个能干活的设备。
+> 这条路一个人走不完，代码全部开源，**欢迎一起开发**。
 
 ---
 
@@ -108,6 +115,60 @@ python3 -m jiaozi --host 0.0.0.0
 下面这张就是手机竖屏下打开文件管理器的样子（浏览器 F12 切到 390×844 可以自己看）：
 
 <p align="center"><img src="docs/images/mobile-files.png" alt="手机上的文件管理器" width="300"></p>
+
+---
+
+## 说你的语言
+
+界面支持 **10 种语言**：简体中文、繁體中文、English、日本語、한국어、Deutsch、Français、Español、Português、Русский。
+
+语言怎么定，优先级是明确的，而且界面上会告诉你这次是怎么定的（设置 → 语言）：
+
+1. **你自己选的** —— 存在浏览器里，永远最高优先；
+2. **浏览器/系统的语言** —— 按 `Accept-Language` 的 q 值排序，取第一个认识的；
+3. **IP 归属地** —— 前两条都不匹配时，用 [api.ip.sb](https://api.ip.sb/geoip/) 解析出口 IP
+   （失败会依次退到 `ipwho.is`、`ipinfo.io`），国家和语言做映射；
+4. 都不行就英文。
+
+第 3 条是**首屏之后异步补的**，不会拖慢打开速度；判定结果变了才重载一次，并用
+`sessionStorage` 打标记，避免"判定→重载→又判定"的死循环。手机通过局域网连电脑时，
+对端 IP 是 `192.168.x.x`，这时候去问的是**服务器自己的出口 IP**——拿内网地址做归属地判断没有意义。
+
+<img src="docs/images/lang-settings.png" alt="设置 → 语言" width="620">
+
+翻译文件是独立的 JSON，加一门语言 = 放一个文件 + 在 `jiaozi/i18n.py` 的 `LANGS` 里加一行：
+
+```json
+// jiaozi/desktop/i18n/de.json
+{
+  "code": "de",
+  "name": "Deutsch",
+  "strings": {
+    "文件": "Dateien",
+    "终端": "Terminal",
+    "{n} 分钟前": "vor {n} Min."
+  }
+}
+```
+
+**key 就是中文原文**，不另造 `app.files.title` 这种键名。源码本来就是中文写的，
+用原文当 key，对照着就能翻，不需要读代码；缺翻译时自动回落，永远不会显示空白。
+
+三级回落：当前语言 → 英文 → 中文原文。占位符 `{n}` `{name}` 两边必须一致，
+这条和"词典里的 key 是否还在源码里"（防孤儿）都由 `tools/i18n_check.py` 机械校验：
+
+```bash
+python3 tools/i18n_check.py           # 检查 + 打印覆盖率
+python3 tools/i18n_check.py --strict  # 覆盖率跌破门槛(默认 50%)直接失败，发版前跑
+```
+
+| 语言 | 覆盖率 |
+|---|---|
+| `en` | 100% |
+| `zh-TW` `ja` `ko` `de` `fr` `es` `pt-BR` `ru` | 约 51%（核心界面全量，长段说明回落英文） |
+
+**欢迎补翻译**：打开 `jiaozi/desktop/i18n/*.json`，把 `strings` 里缺的条目填上，
+跑一遍 `i18n_check.py` 没有报错就可以提 PR。不需要读任何代码。
 
 ---
 
@@ -244,6 +305,8 @@ jiaozi-aiworld/
 │   ├── sysinfo.py        CPU/内存/磁盘/进程（Linux 读 /proc，Windows 走降级实现）
 │   ├── config.py         配置与运行时路径
 │   ├── eventbus.py       进程内事件总线（SSE 推送）
+│   ├── geo.py            出口 IP → 国家/城市（三家 provider 依次回退，磁盘缓存 6h）
+│   ├── i18n.py           语言判定：用户选择 > Accept-Language > IP > 默认
 │   ├── peer.py           局域网互认：组播发现、配对码、跨设备调用
 │   ├── agent/
 │   │   ├── llm.py        OpenAI 兼容客户端（流式 + tool_calls 增量拼装 + 本地代理绕过）
@@ -253,15 +316,18 @@ jiaozi-aiworld/
 │   └── desktop/          前端（无框架、无构建）
 │       ├── index.html
 │       ├── css/          base / desktop / apps
+│       ├── i18n/         10 种语言词典（key 是中文原文）
 │       └── js/
 │           ├── core.js     API、SSE、toast、模态、右键菜单、Markdown
+│           ├── i18n.js     翻译内核、语言切换、按 IP 补判
 │           ├── vt.js       VT 屏幕缓冲与解析器（独立可单测）
 │           ├── wm.js       窗口管理器
 │           ├── shell.js    桌面外壳：图标/任务栏/开始菜单/通知
 │           ├── agent.js    AI 面板
 │           └── apps/       7 个内置应用（含「设备」）
 ├── scripts/              安装、安卓、kiosk、模型
-├── tests/                冒烟测试、VT 单测、界面 E2E
+├── tests/                冒烟测试、VT 单测、界面 E2E、互认 E2E
+├── tools/                i18n_check.py（词典校验与覆盖率）
 └── docs/                 架构、安装、开发板、API、模型
 ```
 
@@ -272,15 +338,16 @@ jiaozi-aiworld/
 我不是"写完就交"。仓库里带三套能自己跑的测试，全部当前通过：
 
 ```bash
-python3 tests/smoke_test.py     # 57 项：HTTP、沙箱、终端、Agent 循环、审批、设备、图像、鉴权
+python3 tests/smoke_test.py     # 58 项：HTTP、沙箱、终端、Agent 循环、审批、设备、图像、鉴权、长连接
 node tests/vt_test.js           # 24 项：VT 解析、颜色、光标、宽字符、HTML 转义
-python3 tests/ui_test.py        # 48 项：真实浏览器加载、点开应用、真敲键盘、设备配对、手机竖屏、截图
+python3 tests/ui_test.py        # 67 项：真实浏览器加载、点开应用、真敲键盘、设备配对、手机竖屏、多语言、截图
 python3 tests/peer_test.py      # 40 项：两个真实进程互相发现、配对、跨设备执行、重启后身份不变
 python3 tests/image_e2e.py      # 8 项：真模型 + 真浏览器，让 AI 现场画两张图（会花额度，单独跑）
+python3 tools/i18n_check.py     # 9 份词典：JSON 可解析、无孤儿、占位符一致、覆盖率
 ```
 
-累计 **169 项断言**。前四个不花钱、不需要联网，可以直接进 CI；
-`image_e2e.py` 会真的调用图像模型，所以和常规回归分开。
+累计 **197 项断言**，另加 9 份词典的机械校验。前四个不花钱、不需要联网，可以直接进 CI；
+`image_e2e.py` 会真的调用图像模型，所以和常规回归分开跑。
 
 `smoke_test.py` 内置了一个假的 OpenAI 兼容模型服务，所以**没有真模型也能验证完整 Agent 链路**：
 它会让"模型"请求 `fs_list`，服务端真的去列目录，把结果回给"模型"，"模型"再给最终答复。
@@ -292,9 +359,12 @@ python3 tests/image_e2e.py      # 8 项：真模型 + 真浏览器，让 AI 现�
 真实截图。终端里那句 `echo JIAOZI-UI-OK` 是走用户完全相同的键盘路径打进去的。
 最后一段把视口切成 390×844 的手机竖屏再量一遍：首屏是不是桌面、有没有横向溢出、
 窗口有没有跑出屏幕、文件名还在不在、终端列数有没有按窄屏重算。
+再往后切到德语，逐条核对：按钮文字真的变德文了、`data-i18n` / `title` / `placeholder`
+三类标记都翻了、缺译时回落而不是空白、词典 404 不白屏、切回中文正常。
 
 **已验证：** Linux/Windows 上的服务、沙箱越权拦截、PTY 与管道终端、双协议 Agent、
-审批阻断、深色主题、窗口拖拽缩放最大化、8 个应用、手机/PC 同源访问、手机竖屏布局。
+审批阻断、深色主题、窗口拖拽缩放最大化、8 个应用、手机/PC 同源访问、手机竖屏布局、
+10 种语言切换与回落。
 
 这套测试不是摆着看的——它们真的抓到过 bug（详见 `docs/ARCHITECTURE.md` 末尾"实测踩到的坑"）。
 

@@ -88,7 +88,8 @@ DEFAULTS: dict = {
         "theme": "light",
         "wallpaper": "aurora",
         "accent": "#2f6bff",
-        "language": "zh",
+        #: auto = 先看浏览器语言，再看 IP 归属地；也可以填固定语言码（zh-CN / en / ja ...）
+        "language": "auto",
     },
     "shell": {
         "default": "",

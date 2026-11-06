@@ -37,21 +37,21 @@
       root.innerHTML =
         '<div class="app">' +
           '<div class="app-bar">' +
-            '<button class="ibtn" data-nav="back" title="后退">' + JZ.icon('arrow-left', 16) + '</button>' +
-            '<button class="ibtn" data-nav="up" title="上一级">' + JZ.icon('arrow-up', 16) + '</button>' +
-            '<button class="ibtn" data-nav="refresh" title="刷新">' + JZ.icon('refresh', 16) + '</button>' +
+            '<button class="ibtn" data-nav="back" title="后退" data-i18n-title="后退">' + JZ.icon('arrow-left', 16) + '</button>' +
+            '<button class="ibtn" data-nav="up" title="上一级" data-i18n-title="上一级">' + JZ.icon('arrow-up', 16) + '</button>' +
+            '<button class="ibtn" data-nav="refresh" title="刷新" data-i18n-title="刷新">' + JZ.icon('refresh', 16) + '</button>' +
             '<div class="sep"></div>' +
-            '<button class="btn sm" data-nav="newdir">' + JZ.icon('plus', 14) + '新建</button>' +
-            '<button class="btn sm" data-nav="upload">' + JZ.icon('upload', 14) + '上传</button>' +
+            '<button class="btn sm" data-nav="newdir">' + JZ.icon('plus', 14) + esc(JZ.t('新建')) + '</button>' +
+            '<button class="btn sm" data-nav="upload">' + JZ.icon('upload', 14) + esc(JZ.t('上传')) + '</button>' +
             '<div style="flex:1"></div>' +
             '<div class="tb-search" style="width:190px;height:29px">' + JZ.icon('search', 14) +
-              '<input placeholder="在当前目录搜索" class="fsearch"></div>' +
+              '<input placeholder="' + esc(JZ.t('在当前目录搜索')) + '" class="fsearch"></div>' +
           '</div>' +
           '<div class="fm">' +
             '<div class="fm-side"></div>' +
             '<div class="fm-main">' +
               '<div class="fm-crumb"></div>' +
-              '<div class="fm-head"><span>名称</span><span>大小</span><span>修改时间</span></div>' +
+              '<div class="fm-head"><span>' + esc(JZ.t('名称')) + '</span><span>' + esc(JZ.t('大小')) + '</span><span>' + esc(JZ.t('修改时间')) + '</span></div>' +
               '<div class="fm-list"></div>' +
             '</div>' +
           '</div>' +
@@ -81,17 +81,17 @@
         const home = JZ.state.home || '';
         const s = sep(home);
         const quick = [
-          { name: '主目录', path: home, icon: 'home' },
-          { name: '桌面', path: join(home, 'Desktop'), icon: 'desktop' },
-          { name: '下载', path: join(home, 'Downloads'), icon: 'download' },
-          { name: '文档', path: join(home, 'Documents'), icon: 'file-text' },
-          { name: '图片', path: join(home, 'Pictures'), icon: 'image' },
+          { name: JZ.t('主目录'), path: home, icon: 'home' },
+          { name: JZ.t('桌面'), path: join(home, 'Desktop'), icon: 'desktop' },
+          { name: JZ.t('下载'), path: join(home, 'Downloads'), icon: 'download' },
+          { name: JZ.t('文档'), path: join(home, 'Documents'), icon: 'file-text' },
+          { name: JZ.t('图片'), path: join(home, 'Pictures'), icon: 'image' },
         ];
-        let html = '<div class="fm-grp">常用</div>';
+        let html = '<div class="fm-grp">' + esc(JZ.t('常用')) + '</div>';
         quick.forEach(function (q) {
           html += '<button class="fm-nav" data-path="' + esc(q.path) + '">' + JZ.icon(q.icon, 15) + esc(q.name) + '</button>';
         });
-        html += '<div class="fm-grp">沙箱根目录</div>';
+        html += '<div class="fm-grp">' + esc(JZ.t('沙箱根目录')) + '</div>';
         (JZ.state.roots || []).forEach(function (r) {
           html += '<button class="fm-nav" data-path="' + esc(r.path) + '" title="' + esc(r.path) + '">' +
             JZ.icon('hard-drive', 15) + esc(r.name) + '</button>';
@@ -120,7 +120,7 @@
       function renderList() {
         if (!items.length) {
           list.innerHTML = '<div class="empty" style="height:180px">' + JZ.icon('folder-open', 40) +
-            '<div>' + (searching ? '没有匹配的文件' : '这个文件夹是空的') + '</div></div>';
+            '<div>' + esc(searching ? JZ.t('没有匹配的文件') : JZ.t('这个文件夹是空的')) + '</div></div>';
           return;
         }
         list.innerHTML = items.map(function (it, i) {
@@ -147,22 +147,22 @@
         selected = it;
         list.querySelectorAll('.fm-row').forEach(r => r.classList.remove('sel'));
         if (row) row.classList.add('sel');
-        stSel.textContent = it ? ('已选 1 项 · ' + (it.is_dir ? '文件夹' : JZ.fmt.bytes(it.size))) : '';
+        stSel.textContent = it ? (JZ.t('已选 1 项') + ' · ' + (it.is_dir ? JZ.t('文件夹') : JZ.fmt.bytes(it.size))) : '';
       }
 
       function rowMenu(x, y, it) {
         JZ.menu(x, y, [
-          { label: '打开', icon: 'external-link', action: () => open(it) },
-          { label: it.is_dir ? '在此打开终端' : '用编辑器打开', icon: it.is_dir ? 'terminal' : 'edit', action: () => {
+          { label: JZ.t('打开'), icon: 'external-link', action: () => open(it) },
+          { label: it.is_dir ? JZ.t('在此打开终端') : JZ.t('用编辑器打开'), icon: it.is_dir ? 'terminal' : 'edit', action: () => {
             if (it.is_dir) JZ.WM.open('terminal', { cwd: it.path });
             else JZ.WM.open('editor', { path: it.path });
           }, disabled: false },
           { sep: true },
-          { label: '重命名', icon: 'edit', key: 'F2', action: () => rename(it) },
-          { label: '复制副本', icon: 'copy', action: () => copyItem(it) },
-          { label: '下载到本机', icon: 'download', action: () => download(it) },
+          { label: JZ.t('重命名'), icon: 'edit', key: 'F2', action: () => rename(it) },
+          { label: JZ.t('复制副本'), icon: 'copy', action: () => copyItem(it) },
+          { label: JZ.t('下载到本机'), icon: 'download', action: () => download(it) },
           { sep: true },
-          { label: '删除', icon: 'trash', key: 'Del', danger: true, action: () => del(it) },
+          { label: JZ.t('删除'), icon: 'trash', key: 'Del', danger: true, action: () => del(it) },
         ]);
       }
 
@@ -179,11 +179,11 @@
           selected = null;
           stSel.textContent = '';
           renderSide(); renderCrumb(); renderList();
-          stCount.textContent = d.items.length + ' 个项目';
-          win.setTitle('文件 — ' + (cwd.split(/[\\/]/).pop() || cwd));
+          stCount.textContent = JZ.t('{n} 个项目', { n: d.items.length });
+          win.setTitle(JZ.t('文件') + ' — ' + (cwd.split(/[\\/]/).pop() || cwd));
           refreshDisk();
         } catch (e) {
-          JZ.toast('打不开这个目录', e.message, 'err');
+          JZ.toast(JZ.t('打不开这个目录'), e.message, 'err');
         }
       }
 
@@ -208,7 +208,7 @@
           const info = await JZ.api.get('/api/sys/info');
           JZ.state.sys = info;
           const free = (info.disk.free / 1024 / 1024 / 1024).toFixed(1);
-          stDisk.textContent = '可用 ' + free + ' GB / 共 ' +
+          stDisk.textContent = JZ.t('可用') + ' ' + free + ' GB / ' + JZ.t('共') + ' ' +
             (info.disk.total / 1024 / 1024 / 1024).toFixed(0) + ' GB';
         } catch (e) {}
       }
@@ -228,32 +228,32 @@
       }
 
       async function rename(it) {
-        const n = await JZ.prompt('重命名', it.name, it.path);
+        const n = await JZ.prompt(JZ.t('重命名'), it.name, it.path);
         if (!n || n === it.name) return;
         try {
           await JZ.api.post('/api/fs/rename', { path: it.path, to: join(cwd, n) });
-          JZ.toast('已重命名', n, 'ok');
+          JZ.toast(JZ.t('已重命名'), n, 'ok');
           refresh();
-        } catch (e) { JZ.toast('重命名失败', e.message, 'err'); }
+        } catch (e) { JZ.toast(JZ.t('重命名失败'), e.message, 'err'); }
       }
 
       async function copyItem(it) {
         try {
           await JZ.api.post('/api/fs/copy', { path: it.path, to: cwd });
-          JZ.toast('已复制', it.name, 'ok');
+          JZ.toast(JZ.t('已复制'), it.name, 'ok');
           refresh();
-        } catch (e) { JZ.toast('复制失败', e.message, 'err'); }
+        } catch (e) { JZ.toast(JZ.t('复制失败'), e.message, 'err'); }
       }
 
       async function del(it) {
-        const ok = await JZ.confirm('删除「' + it.name + '」？',
-          '文件会进入回收站（~/.jiaozi/trash），可以手动找回。', true);
+        const ok = await JZ.confirm(JZ.t('删除「{name}」？', { name: it.name }),
+          JZ.t('文件会进入回收站（~/.jiaozi/trash），可以手动找回。'), true);
         if (!ok) return;
         try {
           await JZ.api.post('/api/fs/delete', { path: it.path });
-          JZ.toast('已移入回收站', it.name, 'ok');
+          JZ.toast(JZ.t('已移入回收站'), it.name, 'ok');
           refresh();
-        } catch (e) { JZ.toast('删除失败', e.message, 'err'); }
+        } catch (e) { JZ.toast(JZ.t('删除失败'), e.message, 'err'); }
       }
 
       // ---------------- 工具栏 ----------------
@@ -262,14 +262,14 @@
         if (p) go(p);
       };
       root.querySelector('[data-nav="up"]').onclick = function () { if (parentPath) go(parentPath); };
-      root.querySelector('[data-nav="refresh"]').onclick = function () { refresh(); JZ.toast('已刷新', '', 'ok', 1200); };
+      root.querySelector('[data-nav="refresh"]').onclick = function () { refresh(); JZ.toast(JZ.t('已刷新'), '', 'ok', 1200); };
       root.querySelector('[data-nav="newdir"]').onclick = async function () {
-        const n = await JZ.prompt('新建文件夹', '新建文件夹', cwd);
+        const n = await JZ.prompt(JZ.t('新建文件夹'), JZ.t('新建文件夹'), cwd);
         if (!n) return;
         try {
           await JZ.api.post('/api/fs/mkdir', { path: join(cwd, n) });
           refresh();
-        } catch (e) { JZ.toast('创建失败', e.message, 'err'); }
+        } catch (e) { JZ.toast(JZ.t('创建失败'), e.message, 'err'); }
       };
       root.querySelector('[data-nav="upload"]').onclick = function () { input.click(); };
       input.onchange = function () { uploadFiles(Array.from(input.files || [])); input.value = ''; };
@@ -277,7 +277,7 @@
       async function uploadFiles(files) {
         if (!files.length) return;
         for (const f of files) {
-          if (f.size > 60 * 1024 * 1024) { JZ.toast('跳过超大文件', f.name, 'warn'); continue; }
+          if (f.size > 60 * 1024 * 1024) { JZ.toast(JZ.t('跳过超大文件'), f.name, 'warn'); continue; }
           try {
             const b64 = await new Promise(function (res, rej) {
               const r = new FileReader();
@@ -286,8 +286,8 @@
               r.readAsDataURL(f);
             });
             await JZ.api.post('/api/fs/upload', { dir: cwd, name: f.name, data: b64 });
-            JZ.toast('已上传', f.name, 'ok', 1800);
-          } catch (e) { JZ.toast('上传失败 ' + f.name, e.message, 'err'); }
+            JZ.toast(JZ.t('已上传'), f.name, 'ok', 1800);
+          } catch (e) { JZ.toast(JZ.t('上传失败') + ' ' + f.name, e.message, 'err'); }
         }
         refresh();
       }
@@ -316,8 +316,8 @@
             const hits = await JZ.api.get('/api/fs/search', { path: cwd, q: q, limit: 200 });
             items = hits;
             renderList();
-            stCount.textContent = hits.length + ' 个结果';
-          } catch (e) { JZ.toast('搜索失败', e.message, 'err'); }
+            stCount.textContent = JZ.t('{n} 个结果', { n: hits.length });
+          } catch (e) { JZ.toast(JZ.t('搜索失败'), e.message, 'err'); }
         }, 260);
       };
 
@@ -334,11 +334,11 @@
         if (e.target.closest('.fm-row')) return;
         e.preventDefault();
         JZ.menu(e.clientX, e.clientY, [
-          { label: '新建文件夹', icon: 'plus', action: () => root.querySelector('[data-nav="newdir"]').click() },
-          { label: '上传文件', icon: 'upload', action: () => input.click() },
-          { label: '刷新', icon: 'refresh', action: refresh },
+          { label: JZ.t('新建文件夹'), icon: 'plus', action: () => root.querySelector('[data-nav="newdir"]').click() },
+          { label: JZ.t('上传文件'), icon: 'upload', action: () => input.click() },
+          { label: JZ.t('刷新'), icon: 'refresh', action: refresh },
           { sep: true },
-          { label: '在终端中打开', icon: 'terminal', action: () => JZ.WM.open('terminal', { cwd: cwd }) },
+          { label: JZ.t('在终端中打开'), icon: 'terminal', action: () => JZ.WM.open('terminal', { cwd: cwd }) },
         ]);
       };
 

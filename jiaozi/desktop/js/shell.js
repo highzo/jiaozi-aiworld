@@ -32,7 +32,11 @@
   /* ---------------- 启动 ---------------- */
   async function boot() {
     try {
-      bootTip('读取配置…');
+      // 先把语言定下来，再让任何界面文字出现。init 只查本地配置和请求头，
+      // 不碰网络（IP 定位在 refineByIP 里，首屏之后异步补），所以这里不会卡。
+      await JZ.i18n.init();
+      JZ.i18n.apply(document);
+      bootTip(JZ.t('读取配置…'));
       const cfg = await JZ.api.get('/api/config');
       JZ.state.config = cfg;
 
@@ -47,7 +51,7 @@
         }
       } catch (e) {}
 
-      bootTip('挂载桌面…');
+      bootTip(JZ.t('挂载桌面…'));
       const ds = await JZ.api.get('/api/desktop/state');
       JZ.state.home = ds.home;
       JZ.state.roots = ds.roots;
@@ -55,7 +59,7 @@
 
       applyAppearance(ds.ui || cfg.ui || {});
 
-      bootTip('连接内核…');
+      bootTip(JZ.t('连接内核…'));
       try { JZ.state.sys = await JZ.api.get('/api/sys/info'); } catch (e) {}
 
       renderIcons();
@@ -71,16 +75,18 @@
       bindServerEvents();
       if (JZ.initAgent) JZ.initAgent();
 
-      bootTip('就绪');
+      bootTip(JZ.t('就绪'));
       setTimeout(function () {
         document.body.classList.remove('booting');
         setTimeout(welcome, 900);
         openDeepLink();
+        // 首屏之后再按 IP 判一次：浏览器语言不匹配时才需要，多语言的"最后一公里"
+        JZ.i18n.refineByIP();
       }, 420);
     } catch (e) {
-      bootTip('启动失败：' + e.message);
+      bootTip(JZ.t('启动失败：') + e.message);
       console.error(e);
-      JZ.toast('启动异常', e.message, 'err', 8000);
+      JZ.toast(JZ.t('启动异常'), e.message, 'err', 8000);
       setTimeout(function () { document.body.classList.remove('booting'); }, 1200);
     }
   }
@@ -88,8 +94,8 @@
   function welcome() {
     if (!JZ.pref.get('welcomed', false)) {
       JZ.pref.set('welcomed', true);
-      JZ.toast('饺子AIWorld 已就绪', '我是饺子，住在这台机器里。左边是我的对话窗，直接吩咐就行。', 'ok', 7000);
-      pushNotif('欢迎', '桌面和 AI 共用同一份文件。你改的、我改的，都是同一个。');
+      JZ.toast(JZ.t('饺子AIWorld 已就绪'), JZ.t('我是饺子，住在这台机器里。左边是我的对话窗，直接吩咐就行。'), 'ok', 7000);
+      pushNotif(JZ.t('欢迎'), JZ.t('桌面和 AI 共用同一份文件。你改的、我改的，都是同一个。'));
     }
   }
 
@@ -124,7 +130,7 @@
       return '<div class="dicon" data-app="' + d.app + '">' +
         '<div class="glyph" style="background:linear-gradient(140deg,' + (app.color || '#4d8cf5') + ',' +
         shade(app.color || '#4d8cf5') + ')">' + JZ.icon(app.icon, 24) + '</div>' +
-        '<div class="lbl">' + esc(d.label) + '</div></div>';
+        '<div class="lbl">' + esc(JZ.t(d.label)) + '</div></div>';
     }).join('');
     host.querySelectorAll('.dicon').forEach(function (el) {
       el.onclick = function (e) {
@@ -138,8 +144,8 @@
         host.querySelectorAll('.dicon').forEach(x => x.classList.remove('sel'));
         el.classList.add('sel');
         JZ.menu(e.clientX, e.clientY, [
-          { label: '打开', icon: 'external-link', action: () => launch(el.dataset.app) },
-          { label: '应用信息', icon: 'info', action: () => JZ.toast('应用', el.dataset.app, 'info') },
+          { label: JZ.t('打开'), icon: 'external-link', action: () => launch(el.dataset.app) },
+          { label: JZ.t('应用信息'), icon: 'info', action: () => JZ.toast(JZ.t('应用'), el.dataset.app, 'info') },
         ]);
       };
     });
@@ -175,7 +181,7 @@
       const wins = JZ.WM.byApp(id);
       const active = JZ.WM.active && JZ.WM.active.appId === id && !JZ.WM.active.min;
       return '<button class="tb-app' + (wins.length ? ' running' : '') + (active ? ' active' : '') +
-        '" data-app="' + id + '" title="' + esc(app.name) + '">' +
+        '" data-app="' + id + '" title="' + esc(JZ.t(app.name)) + '">' +
         '<span class="g" style="background:linear-gradient(140deg,' + (app.color || '#4d8cf5') + ',' + shade(app.color || '#4d8cf5') + ')">' +
         JZ.icon(app.icon, 15) + '</span></button>';
     }).join('');
@@ -192,10 +198,10 @@
       b.oncontextmenu = function (e) {
         e.preventDefault();
         const wins = JZ.WM.byApp(b.dataset.app);
-        const items = [{ label: '新建窗口', icon: 'plus', action: () => JZ.WM.open(b.dataset.app) }];
+        const items = [{ label: JZ.t('新建窗口'), icon: 'plus', action: () => JZ.WM.open(b.dataset.app) }];
         if (wins.length) {
           items.push({ sep: true });
-          items.push({ label: '关闭全部窗口', icon: 'x', danger: true, action: () => wins.forEach(w => JZ.WM.close(w)) });
+          items.push({ label: JZ.t('关闭全部窗口'), icon: 'x', danger: true, action: () => wins.forEach(w => JZ.WM.close(w)) });
         }
         JZ.menu(e.clientX, e.clientY, items);
       };
@@ -211,14 +217,14 @@
     grid.innerHTML = list.map(function (app) {
       return '<button class="sm-app" data-app="' + app.id + '">' +
         '<span class="g" style="background:linear-gradient(140deg,' + (app.color || '#4d8cf5') + ',' + shade(app.color || '#4d8cf5') + ')">' +
-        JZ.icon(app.icon, 19) + '</span><span>' + esc(app.name) + '</span></button>';
+        JZ.icon(app.icon, 19) + '</span><span>' + esc(JZ.t(app.name)) + '</span></button>';
     }).join('');
     grid.querySelectorAll('.sm-app').forEach(function (b) {
       b.onclick = function () { closeStart(); launch(b.dataset.app); };
     });
 
     document.getElementById('smQuick').innerHTML = QUICK.map(function (q) {
-      return '<button class="sm-q">' + JZ.icon(q.icon, 15) + '<span>' + esc(q.text) + '</span></button>';
+      return '<button class="sm-q">' + JZ.icon(q.icon, 15) + '<span>' + esc(JZ.t(q.text)) + '</span></button>';
     }).join('');
     document.getElementById('smQuick').querySelectorAll('.sm-q').forEach(function (b) {
       b.onclick = function () {
@@ -227,7 +233,7 @@
       };
     });
 
-    document.getElementById('smHost').textContent = JZ.state.host || '本机';
+    document.getElementById('smHost').textContent = JZ.state.host || JZ.t('本机');
     document.getElementById('smAvatar').textContent = (JZ.state.host || 'J').slice(0, 1).toUpperCase();
 
     const search = document.getElementById('smSearch');
@@ -235,7 +241,8 @@
       const q = search.value.trim().toLowerCase();
       grid.querySelectorAll('.sm-app').forEach(function (b) {
         const name = (JZ.apps[b.dataset.app] || { name: '饺子 AI' }).name.toLowerCase();
-        b.style.display = !q || name.indexOf(q) >= 0 ? '' : 'none';
+        const lname = JZ.t(name).toLowerCase();
+        b.style.display = !q || name.indexOf(q) >= 0 || lname.indexOf(q) >= 0 ? '' : 'none';
       });
     };
     search.onkeydown = function (e) {
@@ -252,9 +259,9 @@
     document.getElementById('smPower').onclick = function () {
       closeStart();
       JZ.modal({
-        title: '关闭这个桌面窗口？',
-        body: '只是关掉浏览器页面。服务端还在运行，重新打开地址即可回来。',
-        okText: '关闭',
+        title: JZ.t('关闭这个桌面窗口？'),
+        body: JZ.t('只是关掉浏览器页面。服务端还在运行，重新打开地址即可回来。'),
+        okText: JZ.t('关闭'),
       }).then(function (ok) { if (ok) window.close(); });
     };
   }
@@ -299,13 +306,13 @@
   function renderNotif() {
     const l = document.getElementById('npList');
     if (!notifications.length) {
-      l.innerHTML = '<div class="np-empty">还没有通知</div>';
+      l.innerHTML = '<div class="np-empty">' + esc(JZ.t('还没有通知')) + '</div>';
       return;
     }
     l.innerHTML = notifications.map(function (n) {
       const d = new Date(n.ts);
       return '<div class="np-item"><b>' + esc(n.title) + '</b><span>' + esc(n.body || '') + '</span>' +
-        '<small>' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) + '</small></div>';
+        '<small>' + d.toLocaleTimeString(JZ.i18n.locale, { hour: '2-digit', minute: '2-digit' }) + '</small></div>';
     }).join('');
   }
 
@@ -313,8 +320,8 @@
   function bindServerEvents() {
     JZ.on('ev:notify', function (ev) {
       const d = ev.d || {};
-      JZ.toast(d.title || '通知', d.body, d.level || 'info', 5000);
-      pushNotif(d.title || '通知', d.body, d.level);
+      JZ.toast(d.title || JZ.t('通知'), d.body, d.level || 'info', 5000);
+      pushNotif(d.title || JZ.t('通知'), d.body, d.level);
     });
     JZ.on('ev:toast', function (ev) {
       const d = ev.d || {};
@@ -336,14 +343,14 @@
     });
     JZ.on('ev:ai_shell', function (ev) {
       const d = ev.d || {};
-      pushNotif('AI 执行命令', '$ ' + (d.cmd || '').slice(0, 120) + '\n退出码 ' + d.exit_code);
+      pushNotif(JZ.t('AI 执行命令'), '$ ' + (d.cmd || '').slice(0, 120) + '\n' + JZ.t('退出码') + ' ' + d.exit_code);
     });
     JZ.on('ev:config', function (ev) {
       JZ.api.get('/api/config').then(function (c) { JZ.state.config = c; if (JZ.onConfig) JZ.onConfig(c); }).catch(function () {});
     });
     JZ.on('ev:sse', function (d) {
       if (!d.online) {
-        document.getElementById('aiStatus').textContent = '连接断开';
+        document.getElementById('aiStatus').textContent = JZ.t('连接断开');
       }
     });
     JZ.on('ev:fs_change', function () { /* 文件管理器自行订阅 */ });
@@ -385,14 +392,14 @@
       if (e.target.closest('.win') || e.target.closest('.dicon')) return;
       e.preventDefault();
       JZ.menu(e.clientX, e.clientY, [
-        { label: '新建文件夹', icon: 'plus', action: newDesktopFolder },
-        { label: '打开终端', icon: 'terminal', action: () => JZ.WM.open('terminal') },
-        { label: '刷新', icon: 'refresh', action: () => window.location.reload() },
+        { label: JZ.t('新建文件夹'), icon: 'plus', action: newDesktopFolder },
+        { label: JZ.t('打开终端'), icon: 'terminal', action: () => JZ.WM.open('terminal') },
+        { label: JZ.t('刷新'), icon: 'refresh', action: () => window.location.reload() },
         { sep: true },
-        { label: '换一张壁纸', icon: 'image', action: cycleWallpaper },
-        { label: '显示设置', icon: 'settings', action: () => JZ.WM.open('settings') },
+        { label: JZ.t('换一张壁纸'), icon: 'image', action: cycleWallpaper },
+        { label: JZ.t('显示设置'), icon: 'settings', action: () => JZ.WM.open('settings') },
         { sep: true },
-        { label: '问饺子', icon: 'sparkles', action: () => JZ.agent && JZ.agent.toggle(true) },
+        { label: JZ.t('问饺子'), icon: 'sparkles', action: () => JZ.agent && JZ.agent.toggle(true) },
       ]);
     });
 
@@ -424,14 +431,14 @@
   async function newDesktopFolder() {
     const home = JZ.state.home || '';
     const sep = home.indexOf('\\') >= 0 ? '\\' : '/';
-    const name = await JZ.prompt('新建文件夹', '新建文件夹', '将创建在 ' + home + sep + 'Desktop');
+    const name = await JZ.prompt(JZ.t('新建文件夹'), JZ.t('新建文件夹'), JZ.t('将创建在') + ' ' + home + sep + 'Desktop');
     if (!name) return;
     try {
       await JZ.api.post('/api/fs/mkdir', { path: home.replace(/[\\/]$/, '') + sep + 'Desktop' + sep + name });
-      JZ.toast('已创建', name, 'ok');
+      JZ.toast(JZ.t('已创建'), name, 'ok');
       const f = JZ.WM.open('files');
     } catch (e) {
-      JZ.toast('创建失败', e.message + '（可能没有 Desktop 目录，试试在文件管理器里新建）', 'err', 6000);
+      JZ.toast(JZ.t('创建失败'), e.message + JZ.t('（可能没有 Desktop 目录，试试在文件管理器里新建）'), 'err', 6000);
     }
   }
 
@@ -441,7 +448,7 @@
     const next = all[(all.indexOf(cur) + 1) % all.length];
     document.getElementById('wallpaper').className = 'wp-' + next;
     JZ.pref.set('wallpaper', next);
-    JZ.toast('壁纸已切换', next, 'ok', 1400);
+    JZ.toast(JZ.t('壁纸已切换'), next, 'ok', 1400);
   }
 
   document.addEventListener('DOMContentLoaded', boot);

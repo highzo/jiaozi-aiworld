@@ -27,7 +27,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ui_test as U  # noqa: E402
-from ui_test import WS, find_browser, ok, PASS, FAIL  # noqa: E402
+from ui_test import WS, find_browser, ok, PASS, FAIL, reset_profile  # noqa: E402
 
 URL = os.environ.get("JIAOZI_URL", "http://127.0.0.1:8787").rstrip("/") + "/"
 PORT = int(os.environ.get("CDP_PORT", "9444"))
@@ -55,6 +55,7 @@ def main() -> int:
         return 1
 
     prof = os.path.join(tempfile.gettempdir(), "jz_cdp_img")
+    reset_profile(prof)
     proc = subprocess.Popen([
         exe, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
         f"--remote-debugging-port={PORT}", f"--user-data-dir={prof}",

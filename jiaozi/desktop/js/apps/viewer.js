@@ -19,12 +19,12 @@
         '<div class="app">' +
           '<div class="app-bar"><span class="vw-name" style="font-size:12.5px;color:var(--text-2);max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>' +
             '<div style="flex:1"></div>' +
-            '<button class="btn sm" data-z="prev" title="上一张">‹</button>' +
-            '<button class="btn sm" data-z="next" title="下一张">›</button>' +
-            '<button class="btn sm" data-z="out">缩小</button>' +
-            '<button class="btn sm" data-z="fit">适应</button>' +
-            '<button class="btn sm" data-z="in">放大</button>' +
-            '<button class="btn sm" data-z="open">外部打开</button>' +
+            '<button class="btn sm" data-z="prev" title="' + esc(JZ.t('上一张')) + '">‹</button>' +
+            '<button class="btn sm" data-z="next" title="' + esc(JZ.t('下一张')) + '">›</button>' +
+            '<button class="btn sm" data-z="out">' + esc(JZ.t('缩小')) + '</button>' +
+            '<button class="btn sm" data-z="fit">' + esc(JZ.t('适应')) + '</button>' +
+            '<button class="btn sm" data-z="in">' + esc(JZ.t('放大')) + '</button>' +
+            '<button class="btn sm" data-z="open">' + esc(JZ.t('外部打开')) + '</button>' +
           '</div>' +
           '<div class="viewer"><img alt=""></div>' +
           '<div class="vw-strip" hidden></div>' +
@@ -46,12 +46,12 @@
         if (!list.length) return;
         idx = (i + list.length) % list.length;
         const p = list[idx];
-        const name = p.split(/[\\/]/).pop() || '图片';
+        const name = p.split(/[\\/]/).pop() || JZ.t('图片');
         zoom = 1;
         applyZoom();
         img.src = JZ.api.raw('/api/fs/raw', { path: p });
         nameEl.textContent = name;
-        win.setTitle(name + ' — 图片');
+        win.setTitle(name + ' — ' + JZ.t('图片'));
         root.querySelectorAll('.vw-thumb').forEach(function (b, k) {
           b.classList.toggle('on', k === idx);
         });
@@ -70,7 +70,7 @@
       };
       img.onerror = function () {
         viewer.innerHTML = '<div class="empty">' + JZ.icon('alert-triangle', 36) +
-          '<div>无法显示这张图片</div></div>';
+          '<div>' + esc(JZ.t('无法显示这张图片')) + '</div></div>';
       };
 
       root.querySelector('[data-z="in"]').onclick = function () { zoom = Math.min(6, zoom * 1.25); applyZoom(); };
@@ -118,9 +118,9 @@
               .map(function (it) { return it.path; });
             if (!list.length) {
               viewer.innerHTML = '<div class="empty">' + JZ.icon('image', 36) +
-                '<div>这个文件夹里没有图片</div></div>';
+                '<div>' + esc(JZ.t('这个文件夹里没有图片')) + '</div></div>';
               nameEl.textContent = st.name;
-              win.setTitle(st.name + ' — 图片');
+              win.setTitle(st.name + ' — ' + JZ.t('图片'));
               return;
             }
             win.setTitle(st.name + ' — 图片');
@@ -129,13 +129,13 @@
             return;
           }
           list = [st ? st.path : startPath];
-          nameEl.textContent = (st && st.name) || '图片';
-          win.setTitle(((st && st.name) || '图片') + ' — 图片');
+          nameEl.textContent = (st && st.name) || JZ.t('图片');
+          win.setTitle(((st && st.name) || JZ.t('图片')) + ' — ' + JZ.t('图片'));
           show(0);
         } catch (e) {
-          nameEl.textContent = '图片';
+          nameEl.textContent = JZ.t('图片');
           viewer.innerHTML = '<div class="empty">' + JZ.icon('alert-triangle', 36) +
-            '<div>打不开：' + esc(e.message || '路径无效') + '</div></div>';
+            '<div>' + esc(JZ.t('打不开：') + (e.message || JZ.t('路径无效'))) + '</div></div>';
         }
       })();
     },

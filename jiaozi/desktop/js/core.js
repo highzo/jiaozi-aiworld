@@ -63,6 +63,7 @@
     eye: '<path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
     lock: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
     mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/>',
+    globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.6 2.4 3.9 5.3 3.9 8.5s-1.3 6.1-3.9 8.5c-2.6-2.4-3.9-5.3-3.9-8.5S9.4 5.9 12 3.5z"/>',
   };
 
   JZ.icon = function (name, size) {
@@ -108,11 +109,11 @@
     dur(s) {
       s = Math.floor(s || 0);
       const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
-      if (d) return d + '天' + h + '小时';
-      if (h) return h + '小时' + m + '分';
-      return m + '分钟';
+      if (d) return JZ.t('{d} 天 {h} 小时', { d: d, h: h });
+      if (h) return JZ.t('{h} 小时 {m} 分', { h: h, m: m });
+      return JZ.t('{m} 分钟', { m: m });
     },
-    num(n) { return (Number(n) || 0).toLocaleString('zh-CN'); },
+    num(n) { return (Number(n) || 0).toLocaleString(JZ.i18n ? JZ.i18n.locale : 'en-US'); },
   };
 
   /* ---------------- API ---------------- */
@@ -218,9 +219,9 @@
       el.innerHTML = '<h3>' + esc(opts.title || '') + '</h3>' +
         (opts.body ? '<p>' + esc(opts.body) + '</p>' : '') + inputHtml +
         '<div class="modal-foot">' +
-        (opts.cancel === false ? '' : '<button class="btn" data-act="cancel">' + esc(opts.cancelText || '取消') + '</button>') +
+        (opts.cancel === false ? '' : '<button class="btn" data-act="cancel">' + esc(opts.cancelText || JZ.t('取消')) + '</button>') +
         '<button class="btn ' + (opts.danger ? 'primary' : 'primary') + '" data-act="ok" style="' +
-        (opts.danger ? 'background:var(--err)' : '') + '">' + esc(opts.okText || '确定') + '</button>' +
+        (opts.danger ? 'background:var(--err)' : '') + '">' + esc(opts.okText || JZ.t('确定')) + '</button>' +
         '</div>';
       host.innerHTML = '';
       const mask = document.createElement('div');
@@ -244,8 +245,8 @@
       });
     });
   };
-  JZ.confirm = (title, body, danger) => JZ.modal({ title: title, body: body, danger: danger, okText: danger ? '确认' : '确定' });
-  JZ.prompt = (title, value, body) => JZ.modal({ title: title, body: body, input: true, value: value, okText: '确定' });
+  JZ.confirm = (title, body, danger) => JZ.modal({ title: title, body: body, danger: danger, okText: danger ? JZ.t('确认') : JZ.t('确定') });
+  JZ.prompt = (title, value, body) => JZ.modal({ title: title, body: body, input: true, value: value, okText: JZ.t('确定') });
 
   /* ---------------- 右键菜单 ---------------- */
   const ctx = () => document.getElementById('ctxMenu');

@@ -19,7 +19,7 @@ import urllib.parse
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import config, fsapi, peer, sysinfo
+from . import config, fsapi, geo, i18n, peer, sysinfo
 from .agent import tools as T
 from .agent.llm import LLMClient, LLMError
 from .agent.loop import get_session
@@ -120,10 +120,12 @@ class Handler(BaseHTTPRequestHandler):
     def read_json(self) -> dict:
         length = int(self.headers.get("Content-Length") or 0)
         if length <= 0:
+            self._body_read = True
             return {}
         if length > 128 * 1024 * 1024:
             raise ApiError("请求体过大", 413)
         raw = self.rfile.read(length)
+        self._body_read = True
         try:
             obj = json.loads(raw.decode("utf-8"))
             return obj if isinstance(obj, dict) else {"value": obj}
@@ -222,6 +224,9 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = urllib.parse.unquote(parsed.path)
         query = urllib.parse.parse_qs(parsed.query)
+        self._body_len = int(self.headers.get("Content-Length") or 0) \
+            if method in ("POST", "PUT", "PATCH", "DELETE") else 0
+        self._body_read = False
         try:
             is_api = path.startswith("/api/")
             if is_api and path not in PUBLIC_API and not self.authed():
@@ -257,6 +262,28 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": f"{type(e).__name__}: {e}"}, 500)
             except Exception:
                 pass
+        finally:
+            self._drain_body()
+
+    def _drain_body(self) -> None:
+        """把 handler 没读的请求体吃掉。
+
+        HTTP/1.1 默认长连接，body 没读完就会留在 socket 缓冲区里，
+        下一个请求的头一行会变成 `{}GET /api/sys/info` —— 服务端报
+        "Unsupported method ('{}GET')"，而浏览器那边看到的是这个连接
+        从此不可用。POST /api/peer/code 就是这么中招的：前端统一带 `{}`
+        发请求，而这个接口不需要参数，从来没读过 body。
+        """
+        if self._body_read or self._body_len <= 0:
+            return
+        self._body_read = True
+        if self._body_len > 4 * 1024 * 1024:      # 大请求体丢弃不划算，直接断开
+            self.close_connection = True
+            return
+        try:
+            self.rfile.read(self._body_len)
+        except OSError:
+            self.close_connection = True
 
     # ---------------- 静态资源 ----------------
     def serve_static(self, path: str, query: dict) -> None:
@@ -344,6 +371,10 @@ class Handler(BaseHTTPRequestHandler):
                 d.pop("api_key", None)
         if clean.get("ui", {}).get("accent") and not re.match(r"^#[0-9a-fA-F]{6}$", clean["ui"]["accent"]):
             clean["ui"].pop("accent", None)
+        # 语言码收敛：认不出来的写法一律回到 auto，避免存进一个永远不会被选中的值
+        if isinstance(clean.get("ui"), dict) and "language" in clean["ui"]:
+            want = str(clean["ui"].get("language") or "auto")
+            clean["ui"]["language"] = "auto" if want == "auto" else (i18n.normalize(want) or "auto")
         # 关闭 localhost 免 token 必须自带有效 token：否则本机随手一个匿名请求
         # 就能把这扇门关上，把调用方和之后所有本机请求一起锁在门外（连恢复都要 token）。
         srv = clean.get("server")
@@ -365,6 +396,53 @@ class Handler(BaseHTTPRequestHandler):
                 print(f"[peer] 按新配置重启失败：{e}")
         BUS.publish("config", {"changed": list(clean.keys())})
         self.send_json({"ok": True, "data": config.public_view(cfg)})
+
+    # ================================================================ 语言
+    @route("GET", r"/api/i18n")
+    def api_i18n(self, q):
+        """返回支持的语言列表 + 本次该用哪个。
+
+        顺序是 用户选择 > Accept-Language > IP 归属地。这里不主动查 IP：
+        查 IP 要联网，不能让它挡在首屏前面。前端拿到 source="default" 时
+        再去 /api/geo 补一次，查到了再热切换。
+        """
+        cfg = config.load()
+        cc = (q.get("country") or [""])[0].upper()
+        res = i18n.resolve(cfg, self.headers.get("Accept-Language") or "", cc)
+        res["ok"] = True
+        res["langs"] = i18n.public_list()
+        res["default"] = i18n.DEFAULT
+        res["supported"] = i18n.CODES
+        data = {"ok": True, "data": res}
+        self.send_json(data)
+
+    @route("POST", r"/api/i18n")
+    def api_i18n_set(self, q):
+        """手动选语言。传 auto 恢复"自动判断"。"""
+        body = self.read_json()
+        want = str(body.get("lang") or "").strip()
+        if want and want != "auto":
+            want = i18n.normalize(want)
+            if not want:
+                raise ApiError(f"不支持的语言：{body.get('lang')}")
+        cfg = config.save({"ui": {"language": want or "auto"}})
+        BUS.publish("config", {"changed": ["ui"]})
+        res = i18n.resolve(cfg, self.headers.get("Accept-Language") or "")
+        self.send_json({"ok": True, "data": res})
+
+    @route("GET", r"/api/geo")
+    def api_geo(self, q):
+        """IP 归属地。?ip= 可指定；否则用请求方地址（内网则自动查出口 IP）。"""
+        ip = (q.get("ip") or [""])[0].strip()
+        if not ip:
+            ip = (self.client_address or [""])[0]
+        force = (q.get("refresh") or [""])[0] in ("1", "true", "yes")
+        try:
+            g = geo.lookup(ip, force=force)
+        except Exception as e:  # noqa: BLE001 定位失败绝不能影响桌面
+            g = {"ok": False, "ip": ip, "error": f"{type(e).__name__}: {e}"}
+        g["suggest"] = i18n.country_to_lang(g.get("country_code") or "")
+        self.send_json({"ok": True, "data": g})
 
     # ================================================================ 文件
     @route("GET", r"/api/fs/list")

@@ -122,28 +122,28 @@
       card.dataset.tc = id;
       card.innerHTML =
         '<div class="sc-head"><span class="sc-ico">' + JZ.icon('zap', 11) + '</span>' +
-        '<span class="sc-title"></span><span class="sc-st">进行中</span></div>' +
+        '<span class="sc-title"></span><span class="sc-st">' + esc(JZ.t('进行中')) + '</span></div>' +
         '<div class="sc-body"></div>';
       turn.appendChild(card);
       card.querySelector('.sc-head').onclick = function () { card.classList.toggle('open'); };
     }
-    card.querySelector('.sc-title').textContent = ev.summary || ev.name || '执行中';
+    card.querySelector('.sc-title').textContent = ev.summary || ev.name || JZ.t('执行中');
     if (ev.status === 'ok') {
       card.className = 'step-card ok';
-      card.querySelector('.sc-st').textContent = '完成';
+      card.querySelector('.sc-st').textContent = JZ.t('完成');
       const imgs = toolImages(ev);
       if (imgs.length) {
         card.classList.add('open', 'has-img');
         renderToolImages(card.querySelector('.sc-body'), imgs);
       } else {
-        card.querySelector('.sc-body').textContent = (ev.result || '(无输出)').slice(0, 4000);
+        card.querySelector('.sc-body').textContent = (ev.result || JZ.t('(无输出)')).slice(0, 4000);
       }
     } else if (ev.status === 'denied') {
       card.className = 'step-card denied';
-      card.querySelector('.sc-st').textContent = '已拒绝';
+      card.querySelector('.sc-st').textContent = JZ.t('已拒绝');
     } else if (ev.status === 'error') {
       card.className = 'step-card error';
-      card.querySelector('.sc-st').textContent = '失败';
+      card.querySelector('.sc-st').textContent = JZ.t('失败');
       card.querySelector('.sc-body').textContent = ev.result || '';
     }
     scrollDown();
@@ -156,11 +156,11 @@
     const args = ev.args || {};
     const detail = ev.name === 'shell_run' ? (args.cmd || '') : JSON.stringify(args, null, 2);
     card.innerHTML =
-      '<h4>' + JZ.icon('alert-triangle', 14) + '需要你确认</h4>' +
+      '<h4>' + JZ.icon('alert-triangle', 14) + esc(JZ.t('需要你确认')) + '</h4>' +
       '<p>' + esc(ev.summary || ev.name) + '</p>' +
       (detail ? '<pre>' + esc(String(detail).slice(0, 600)) + '</pre>' : '') +
-      '<div class="ac-btns"><button class="btn sm primary" data-a="yes">允许</button>' +
-      '<button class="btn sm" data-a="no">拒绝</button></div>';
+      '<div class="ac-btns"><button class="btn sm primary" data-a="yes">' + esc(JZ.t('允许')) + '</button>' +
+      '<button class="btn sm" data-a="no">' + esc(JZ.t('拒绝')) + '</button></div>';
     turn.appendChild(card);
     scrollDown(true);
     card.querySelector('[data-a="yes"]').onclick = function () { answer(card, true); };
@@ -169,7 +169,7 @@
 
   function answer(card, ok) {
     card.classList.add('answered');
-    card.querySelector('p').textContent = (ok ? '已允许：' : '已拒绝：') + card.querySelector('p').textContent;
+    card.querySelector('p').textContent = (ok ? JZ.t('已允许：') : JZ.t('已拒绝：')) + card.querySelector('p').textContent;
     JZ.api.post('/api/agent/approve', { id: card.dataset.aid, ok: ok }).catch(function () {});
   }
 
@@ -189,12 +189,12 @@
     document.querySelector('.ai-hint').classList.toggle('busy', v);
     if (v) {
       sendBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>';
-      sendBtn.title = '停止';
-      statusEl.textContent = '思考中';
+      sendBtn.title = JZ.t('停止');
+      statusEl.textContent = JZ.t('思考中');
     } else {
       sendBtn.innerHTML = JZ.icon('send', 15);
-      sendBtn.title = '发送';
-      statusEl.textContent = '就绪';
+      sendBtn.title = JZ.t('发送');
+      statusEl.textContent = JZ.t('就绪');
       stepsEl.textContent = '';
       input.disabled = false;
       input.focus();
@@ -245,7 +245,7 @@
       }
     } catch (e) {
       if (e.name === 'AbortError') {
-        if (turn) note('已从界面中断。模型可能仍在后台收尾，稍后可以再问我。', 'warn');
+        if (turn) note(JZ.t('已从界面中断。模型可能仍在后台收尾，稍后可以再问我。'), 'warn');
       } else {
         if (turn) {
           const el = document.createElement('div');
@@ -257,7 +257,7 @@
     } finally {
       closeBubble();
       if (!done && turn && !turn.querySelector('.bubble')) {
-        note('本轮没有返回内容。检查模型服务是否在线。', 'err');
+        note(JZ.t('本轮没有返回内容。检查模型服务是否在线。'), 'err');
       }
       setBusy(false);
       abortCtl = null;
@@ -267,10 +267,10 @@
   function handle(ev) {
     switch (ev.t) {
       case 'start':
-        statusEl.textContent = '思考中';
+        statusEl.textContent = JZ.t('思考中');
         break;
       case 'step':
-        stepsEl.textContent = '第 ' + ev.i + ' / ' + ev.max + ' 步';
+        stepsEl.textContent = JZ.t('第 {i} / {max} 步', { i: ev.i, max: ev.max });
         break;
       case 'delta':
         appendText(ev.d || '');
@@ -285,7 +285,7 @@
         approvalCard(ev);
         const card = turn.lastElementChild;
         card.dataset.aid = ev.id;
-        statusEl.textContent = '等待确认';
+        statusEl.textContent = JZ.t('等待确认');
         break;
       }
       case 'warn':
@@ -293,14 +293,14 @@
         break;
       case 'error':
         note(ev.d, 'err');
-        statusEl.textContent = '出错了';
+        statusEl.textContent = JZ.t('出错了');
         break;
       case 'done':
         closeBubble();
         if (ev.content && (!turn.querySelector('.bubble') || !turn.querySelector('.bubble').dataset.raw)) {
           setBubbleText(ev.content);
         }
-        statusEl.textContent = '就绪';
+        statusEl.textContent = JZ.t('就绪');
         break;
       default:
         break;
@@ -330,7 +330,7 @@
     try { await JZ.api.post('/api/agent/reset', { sid: 'main' }); } catch (e) {}
     body.querySelectorAll('.msg').forEach(el => el.remove());
     emptyEl.style.display = '';
-    JZ.toast('新对话', '上下文已清空', 'ok', 1500);
+    JZ.toast(JZ.t('新对话'), JZ.t('上下文已清空'), 'ok', 1500);
   }
 
   function toggle(force) {
@@ -353,7 +353,7 @@
     JZ.agent = { send: send, reset: reset, toggle: toggle };
 
     document.getElementById('aiChips').innerHTML = CHIPS.map(function (c) {
-      return '<button class="chip">' + esc(c) + '</button>';
+      return '<button class="chip">' + esc(JZ.t(c)) + '</button>';
     }).join('');
     document.getElementById('aiChips').querySelectorAll('.chip').forEach(function (b) {
       b.onclick = function () { send(b.textContent); };
@@ -380,7 +380,7 @@
 
     const cfg = JZ.state.config;
     if (cfg && cfg.llm) {
-      modelEl.textContent = cfg.llm.model || '未设置模型';
+      modelEl.textContent = cfg.llm.model || JZ.t('未设置模型');
       modelEl.title = cfg.llm.base_url || '';
     }
     loadHistory();
@@ -392,17 +392,17 @@
       if (JZ.pref.get('aiOpen', true)) document.body.classList.add('ai-open');
     } else {
       const closeBtn = document.getElementById('aiClose');
-      if (closeBtn) closeBtn.title = '返回桌面';
+      if (closeBtn) closeBtn.title = JZ.t('返回桌面');
     }
     // 触屏没有 Enter / Shift，键盘提示对手机用户没有意义
     if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
-      input.placeholder = '让饺子做点什么…（点右侧按钮发送）';
+      input.placeholder = JZ.t('让饺子做点什么…（点右侧按钮发送）');
     }
   }
 
   JZ.onConfig = function (cfg) {
     if (modelEl && cfg.llm) {
-      modelEl.textContent = cfg.llm.model || '未设置模型';
+      modelEl.textContent = cfg.llm.model || JZ.t('未设置模型');
       modelEl.title = cfg.llm.base_url || '';
     }
   };
