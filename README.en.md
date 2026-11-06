@@ -36,7 +36,7 @@ The trade-off: this is not a desktop that runs Photoshop. It is a **device conso
 Only Python 3.8+ standard library. **No pip install, no npm install, no build step.**
 
 ```bash
-git clone <this repo> && cd jiaozi-aiworld
+git clone https://github.com/highzo/jiaozi-aiworld && cd jiaozi-aiworld
 python3 -m jiaozi --open
 ```
 

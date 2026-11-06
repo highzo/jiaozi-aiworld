@@ -37,7 +37,7 @@
 只依赖 Python 3.8+ 标准库。**没有 pip install，没有 npm install，没有构建步骤。**
 
 ```bash
-git clone <这个仓库> && cd jiaozi-aiworld
+git clone https://github.com/highzo/jiaozi-aiworld && cd jiaozi-aiworld
 python3 -m jiaozi --open
 ```
 
