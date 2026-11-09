@@ -98,7 +98,8 @@ On startup it prints a phone-ready URL carrying a token. What the phone sees is 
 | **Terminal** | Hand-written VT parser (256 colour / truecolor / cursor control / wide chars); real PTY on POSIX; reconnects and backfills output |
 | **Editor** | Line numbers, monospace, Ctrl+S, dirty marker, line list |
 | **System monitor** | Live CPU/memory/disk curves, process table, kill process |
-| **Settings** | Model endpoint, **image generation**, approval policy, theme/wallpaper, sandbox root, language — applied immediately |
+| **Appliances** | ESP32 switches, plugs and lamps: auto-discovery, one toggle per channel, sensor readouts — the same switches from phone and PC |
+| **Settings** | Model endpoint, **image generation**, speech recognition, approval policy, theme/wallpaper, sandbox root, language — applied immediately |
 | **Image viewer** | Zoom, fit-to-window, open externally; open a folder and it becomes an album with paging |
 | **Jiaozi AI** | Docked right panel: streaming replies, tool-step cards (finished images shown as thumbnails), approval for dangerous operations |
 
@@ -224,6 +225,32 @@ Recommended tiers: [docs/MODELS.md](docs/MODELS.md) (Chinese).
 
 ---
 
+## Just say it
+
+The microphone next to the AI input lights up in exactly two cases: you pressed it,
+or you explicitly turned on always-listening.
+
+Audio is **encoded to 16 kHz WAV inside the browser** (WebAudio hands you raw PCM;
+you just prepend a 44-byte header), so the server needs no ffmpeg and no decoder —
+which is what keeps the zero-dependency promise intact.
+
+Two backends, picked by availability, and the panel always shows which one is live:
+
+| Backend | What to install | Where the audio goes |
+|---|---|---|
+| local `sherpa-onnx` | `pip install sherpa-onnx` + a model directory | **never leaves the machine** |
+| any OpenAI-compatible transcription API | nothing (whisper.cpp server / vLLM / cloud) | that endpoint |
+| neither | — | the mic button is not shown at all |
+
+In always-listening mode only sentences starting with the wake word (default "饺子")
+are executed; everything else is dropped as chatter. Details in **[docs/VOICE.md](docs/VOICE.md)**.
+
+> Opening the page as `http://192.168.x.x` makes browsers disable the microphone
+> (Secure Context is a hard rule, not our bug). On a phone use
+> `adb reverse tcp:8787 tcp:8787` and open `http://localhost:8787`.
+
+---
+
 ## Using it as a robot / device brain
 
 This is the real ambition of the project: **give a brainless device a local brain.**
@@ -270,6 +297,29 @@ The safety boundary sits in three places:
 
 If public Wi-Fi blocks multicast nothing breaks: IP plus pairing code still connects, only auto-discovery stays empty.
 
+### Appliance switches: ESP32
+
+The board does not talk to your phone and does not touch the internet — it only talks
+to this computer, and your phone opens a page served by that computer. Change phones,
+nothing to reconfigure; the board never has to be exposed.
+
+```bash
+python3 tools/esp_sim.py --id esp32-a1b2 --name Kitchen --channels r1:Lamp,r2:Fan
+```
+
+No hardware yet? That command starts a fake ESP32 and the UI looks exactly the same:
+
+<p align="center"><img src="docs/images/home.png" alt="Appliances panel" width="560"></p>
+
+A real board does only three things: shout who it is once a second (UDP), expose a
+thumbnail-sized HTTP API, and answer when someone searches. **No long-lived connection,
+no heartbeat timeout, no reconnect state machine** — power-cycle it and it is back
+in three seconds.
+
+The AI can drive it too: say "turn on the kitchen lamp" and it calls `esp_devices`
+first, then `esp_control`. Firmware, wiring (including a GPIO trap table), protocol
+and troubleshooting live in **[docs/ESP32.md](docs/ESP32.md)**.
+
 ---
 
 ## Project layout
@@ -286,9 +336,11 @@ jiaozi-aiworld/
 │   ├── geo.py            Egress IP → country/city (three providers in order, 6h disk cache)
 │   ├── i18n.py           Language resolution: user > Accept-Language > IP > default
 │   ├── peer.py           LAN peering: multicast discovery, pairing codes, cross-device calls
+│   ├── esp.py            Appliances: ESP32 discovery, state, switches (device does three things)
+│   ├── voice.py          Transcription: local sherpa / remote API / neither = no mic button
 │   ├── agent/
 │   │   ├── llm.py        OpenAI-compatible client (streaming + tool_calls delta assembly + proxy bypass)
-│   │   ├── tools.py      15 tool definitions and dispatch
+│   │   ├── tools.py      18 tool definitions and dispatch
 │   │   ├── loop.py       Agent loop, dual protocol, approvals, context trimming
 │   │   └── prompts.py    Prompts
 │   └── desktop/          Frontend (no framework, no build)
@@ -302,29 +354,32 @@ jiaozi-aiworld/
 │           ├── wm.js       Window manager
 │           ├── shell.js    Desktop shell: icons / taskbar / start menu / notifications
 │           ├── agent.js    AI panel
-│           └── apps/       7 built-in apps (including "Devices")
-├── scripts/              Install, Android, kiosk, models
-├── tests/                Smoke, VT unit, UI E2E, peering E2E
-├── tools/                i18n_check.py (dictionary validation and coverage)
-└── docs/                 Architecture, install, board, API, models
+│           ├── voice.js    Mic capture, VAD, in-page WAV encoding
+│           └── apps/       8 built-in apps (files/terminal/editor/monitor/devices/appliances/settings/viewer)
+├── firmware/esp32/       ESP32 firmware (Arduino, no third-party libraries)
+├── scripts/              Install, Android, kiosk, models, Windows firewall rules
+├── tests/                Smoke, VT unit, UI E2E, peering E2E, appliances/voice E2E
+├── tools/                esp_sim.py (fake ESP32), doctor.py (connectivity check), i18n_check.py
+└── docs/                 Architecture, install, board, API, models, ESP32, voice, handshake
 ```
 
 ---
 
 ## How far it has been verified
 
-These are not "write it and ship it". The repo carries four self-running suites, all currently green:
+These are not "write it and ship it". The repo carries five self-running suites, all currently green:
 
 ```bash
 python3 tests/smoke_test.py     # 58: HTTP, sandbox, terminal, agent loop, approval, device, image, auth, keep-alive
 node tests/vt_test.js           # 24: VT parsing, colour, cursor, wide chars, HTML escaping
-python3 tests/ui_test.py        # 67: real browser, real keydown, device pairing, phone portrait, i18n, screenshots
+python3 tests/ui_test.py        # 80: real browser, real keydown, device pairing, phone portrait, i18n, appliances, voice, screenshots
 python3 tests/peer_test.py      # 40: two real processes discovering, pairing, cross-device exec, identity across restart
+python3 tests/devices_test.py   # 34: real server + two fake ESP32s — discovery, switches, keys, offline, AI tools, voice pipeline
 python3 tests/image_e2e.py      # 8: real model + real browser, the AI actually draws two images (costs quota, run separately)
 python3 tools/i18n_check.py     # 9 dictionaries: parseable, no orphans, placeholders match, coverage
 ```
 
-**197 assertions** plus mechanical validation of 9 dictionaries. The first four cost nothing and need no network, so they can go straight into CI; `image_e2e.py` really calls an image model and is kept separate.
+**236 assertions** plus mechanical validation of 9 dictionaries. The first five cost nothing and need no network, so they can go straight into CI; `image_e2e.py` really calls an image model and is kept separate.
 
 `smoke_test.py` embeds a fake OpenAI-compatible model server, so **the full agent path is verified without a real model**: the "model" asks for `fs_list`, the server really lists a directory, feeds it back, and the "model" produces a final answer. Approvals are real too — the test receives the approval event over SSE and posts an HTTP approval before the command executes. The last block temporarily disables localhost bypass to check the phone-over-the-network path: no credentials rejected, wrong token rejected, `?token=` trades for a cookie, cookie accepted. That is the difference between "phone can connect to PC" and "phone cannot", and it is not something to guess about.
 
@@ -332,7 +387,8 @@ python3 tools/i18n_check.py     # 9 dictionaries: parseable, no orphans, placeho
 
 These tests are not decoration — they have caught real bugs (see the end of `docs/ARCHITECTURE.md`).
 
-**Verified:** service on Linux/Windows, sandbox escape rejection, PTY and pipe terminals, dual-protocol agent, approval blocking, dark theme, window drag/resize/maximise, 7 apps, phone/PC same-origin access, phone portrait layout, 10-language switching.
+**Verified:** service on Linux/Windows, sandbox escape rejection, PTY and pipe terminals, dual-protocol agent, approval blocking, dark theme, window drag/resize/maximise, 8 apps, phone/PC same-origin access, phone portrait layout,
+10-language switching, ESP32 discovery and switching (simulator), speech transcription pipeline (mock backend).
 
 **Not yet verified (needs your hardware):** retail Android devices, Raspberry Pi / RK3588 boards, multi-step task success rates with real small models, touch gestures, stability beyond 24 hours. I will not claim those "definitely work"; the docs state the expectations and the risks.
 
@@ -353,7 +409,10 @@ These tests are not decoration — they have caught real bugs (see the end of `d
 - [ ] Touch gestures (long-press menu, pinch zoom)
 - [ ] Persist window positions across restarts
 - [ ] Cross-device sessions: AI on the phone driving windows on the PC
-- [ ] Voice entry (local whisper.cpp + streaming TTS)
+- [ ] Streaming speech (today a sentence finishes before anything happens) + TTS read-back
+- [ ] Offline wake word (a real KWS model, for battery life)
+- [ ] IR remote branch in the firmware (AC/TV code sets)
+- [ ] Appliance scenes: one phrase switches several channels ("I'm home")
 - [ ] Skill packs: turn recurring tasks into reusable scripts the AI can call
 - [ ] One-shot board images (Raspberry Pi / RK3588)
 

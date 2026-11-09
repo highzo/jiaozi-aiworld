@@ -74,6 +74,8 @@
       JZ.connect();
       bindServerEvents();
       if (JZ.initAgent) JZ.initAgent();
+      // 语音按钮：服务端说没有识别后端就藏起来，不给一个按了没反应的按钮
+      if (JZ.voice) JZ.voice.init();
 
       bootTip(JZ.t('就绪'));
       setTimeout(function () {

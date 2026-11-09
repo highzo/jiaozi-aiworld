@@ -19,7 +19,7 @@ import urllib.parse
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import config, fsapi, geo, i18n, peer, sysinfo
+from . import config, esp, fsapi, geo, i18n, peer, sysinfo, voice
 from .agent import tools as T
 from .agent.llm import LLMClient, LLMError
 from .agent.loop import get_session
@@ -251,6 +251,10 @@ class Handler(BaseHTTPRequestHandler):
         except ApiError as e:
             self.send_json({"ok": False, "error": e.msg}, e.code)
         except peer.PeerError as e:
+            self.send_json({"ok": False, "error": e.msg}, e.code)
+        except esp.EspError as e:
+            self.send_json({"ok": False, "error": e.msg}, e.code)
+        except voice.VoiceError as e:
             self.send_json({"ok": False, "error": e.msg}, e.code)
         except fsapi.FSError as e:
             self.send_json({"ok": False, "error": str(e)}, e.code)
@@ -811,6 +815,72 @@ class Handler(BaseHTTPRequestHandler):
         r = T.dispatch(name, args, {"remote": True, "from": b.get("from") or ""})
         self.send_json({"ok": True, "data": {"tool": name, "result": r}})
 
+    # ================================================================ 家电（ESP32）
+    # 固件只做三件事：喊身份、报状态、收命令。协议见 docs/ESP32.md。
+    @route("GET", r"/api/esp/devices")
+    def api_esp_devices(self, q):
+        ping = (q.get("ping") or ["1"])[0] != "0"
+        self.send_json({"ok": True, "data": esp.snapshot(ping=ping)})
+
+    @route("POST", r"/api/esp/scan")
+    def api_esp_scan(self, q):
+        r = esp.scan()
+        self.send_json({"ok": True, "data": {**r, **esp.snapshot()}})
+
+    @route("POST", r"/api/esp/add")
+    def api_esp_add(self, q):
+        b = self.read_json()
+        r = esp.add(b.get("host") or "", b.get("port") or 80,
+                    b.get("key") or "", b.get("name") or "")
+        self.send_json({"ok": True, "data": r})
+
+    @route("POST", r"/api/esp/forget")
+    def api_esp_forget(self, q):
+        b = self.read_json()
+        self.send_json({"ok": True, "data": {"forgot": esp.forget(b.get("id") or "")}})
+
+    @route("POST", r"/api/esp/rename")
+    def api_esp_rename(self, q):
+        b = self.read_json()
+        self.send_json({"ok": True, "data": esp.rename(b.get("id") or "", b.get("name") or "")})
+
+    @route("GET", r"/api/esp/state")
+    def api_esp_state(self, q):
+        did = (q.get("id") or [""])[0]
+        self.send_json({"ok": True, "data": esp.state(did)})
+
+    @route("POST", r"/api/esp/control")
+    def api_esp_control(self, q):
+        b = self.read_json()
+        r = esp.control(b.get("id") or "", b.get("channel") or "",
+                        b.get("on"), bool(b.get("toggle")), b.get("action") or "")
+        BUS.publish("esp_change", {"id": b.get("id"), "channel": b.get("channel"),
+                                   "on": b.get("on")})
+        self.send_json({"ok": True, "data": r})
+
+    # ================================================================ 语音
+    # 音频在浏览器里就已经编码成 16k 单声道 WAV，服务端只做转写，不碰 ffmpeg。
+    @route("GET", r"/api/voice/status")
+    def api_voice_status(self, q):
+        cfg = config.load().get("voice") or {}
+        st = voice.status()
+        st["wake"] = cfg.get("wake") or "饺子"
+        st["always_listen"] = bool(cfg.get("always_listen"))
+        self.send_json({"ok": True, "data": st})
+
+    @route("POST", r"/api/voice/asr")
+    def api_voice_asr(self, q):
+        import base64
+        b = self.read_json()
+        raw = b.get("wav") or ""
+        if not isinstance(raw, str) or not raw:
+            raise ApiError("需要 wav（base64）")
+        try:
+            data = base64.b64decode(raw.split(",")[-1], validate=False)
+        except Exception:  # noqa: BLE001
+            raise ApiError("wav 不是合法 base64") from None
+        self.send_json({"ok": True, "data": voice.transcribe(data)})
+
     # ================================================================ 杂项
     @route("GET", r"/api/desktop/state")
     def api_desktop_state(self, q):
@@ -911,6 +981,16 @@ def serve(host: str = "", port: int = 0, open_browser: bool = False) -> None:
     # 局域网互认。失败只影响「自动发现」，手动填 IP 配对照常可用，
     # 所以这里不 Checked —— 一台没有网卡的机器也必须能正常启动。
     discover_ok = peer.start(port)
+    # 家电发现。同样不 Checked：绑不上 8789（被占/无网卡）只影响自动发现，
+    # 手填 IP 加设备、以及所有遥控动作都照常。启动时顺手搜一轮，
+    # 这样打开「家电」时列表里就已经有东西了。
+    esp_ok = False
+    try:
+        esp_ok = esp.start(int((cfg.get("esp") or {}).get("udp_port") or esp.UDP_PORT))
+        if esp_ok:
+            threading.Thread(target=lambda: esp.scan(1.8, 3), daemon=True).start()
+    except Exception as e:  # noqa: BLE001
+        print(f"[esp] 启动发现失败：{e}")
     real_host = host if host not in ("0.0.0.0", "::") else _lan_ip()
     url = f"http://{real_host}:{port}/"
     tok = cfg["auth"]["token"]
@@ -923,6 +1003,10 @@ def serve(host: str = "", port: int = 0, open_browser: bool = False) -> None:
         print(f"  局域网互认: 已开启（{peer.my_name()}，UDP {peer.UDP_PORT}）")
     else:
         print(f"  局域网互认: 未开启（{peer._err or '未知原因'}），可手动填 IP 配对")
+    if esp_ok:
+        print(f"  家电发现: 已开启（UDP {esp.UDP_PORT}，找不到就手动填 IP）")
+    else:
+        print(f"  家电发现: 未开启（{esp._err or '端口被占用'}），仍可手动添加设备")
     if host not in ("0.0.0.0", "::", ""):
         print("  注意: 只监听回环，别的设备连不上；跨设备请加 --host 0.0.0.0")
     print(f"  数据:  {config.DATA_DIR}")

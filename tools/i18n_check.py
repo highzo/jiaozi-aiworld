@@ -37,6 +37,48 @@ PAT_VAR = re.compile(r"\{(\w+)\}")
 PAT_APPNAME = re.compile(r"id:\s*'[\w-]+'\s*,\s*name:\s*'([^']+)'")
 
 
+def strip_comments(js: str) -> str:
+    """去掉 JS 里的注释，避免把注释里举例的 t('…') 当成真文案。
+
+    只看引号状态很够用：项目里的字符串都是单/双引号、没有跨行模板串
+    里嵌注释这种刁钻写法。宁可少剥，也不要剥错把真正的调用吃掉。
+    """
+    out = []
+    i = 0
+    n = len(js)
+    quote = ""
+    while i < n:
+        c = js[i]
+        if quote:
+            out.append(c)
+            if c == "\\" and i + 1 < n:
+                out.append(js[i + 1])
+                i += 2
+                continue
+            if c == quote:
+                quote = ""
+            i += 1
+            continue
+        if c in "'\"`":
+            quote = c
+            out.append(c)
+            i += 1
+            continue
+        if c == "/" and i + 1 < n and js[i + 1] == "/":
+            while i < n and js[i] != "\n":
+                i += 1
+            continue
+        if c == "/" and i + 1 < n and js[i + 1] == "*":
+            i += 2
+            while i + 1 < n and not (js[i] == "*" and js[i + 1] == "/"):
+                i += 1
+            i += 2
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
 def source_keys() -> dict[str, list[str]]:
     """扫描前端源码，收集所有被 t() 包裹或标了 data-i18n 的原文。"""
     found: dict[str, list[str]] = {}
@@ -50,6 +92,7 @@ def source_keys() -> dict[str, list[str]]:
         if f.suffix == ".html":
             hits = [m.group(1) for m in PAT_ATTR.finditer(txt)]
         else:
+            txt = strip_comments(txt)
             hits = [m.group(1).replace("\\'", "'") for m in PAT_T.finditer(txt)]
             hits += [m.group(1) for m in PAT_APPNAME.finditer(txt)]
         for k in hits:

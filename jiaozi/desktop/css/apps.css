@@ -290,3 +290,67 @@
 .lang-now b { font-size: 13.5px; }
 .lang-now span { font-size: 12px; color: var(--text-2); }
 .lang-now small { font-size: 11.6px; color: var(--text-3); line-height: 1.6; }
+
+/* ---------------- 家电 ---------------- */
+.hm { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column;
+  gap: 10px; min-height: 0; }
+
+.hm-add { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.hm-add .input { flex: 1 1 140px; min-width: 120px; }
+.hm-add .hm-port { flex: 0 0 68px; min-width: 68px; text-align: center; }
+.hm-add .hm-key { flex: 0 0 130px; min-width: 110px; }
+
+.hm-hint { font-size: 12px; color: var(--text-3); min-height: 17px; line-height: 1.4; }
+.hm-hint.ok { color: var(--ok); }
+.hm-hint.err { color: var(--err); }
+
+.hm-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: 10px; align-content: start; }
+
+.hm-card { border-radius: 12px; background: var(--surface-solid); border: 1px solid var(--line);
+  padding: 11px 12px 9px; display: flex; flex-direction: column; gap: 9px;
+  transition: opacity .15s ease, border-color .15s ease; }
+.hm-card.off { opacity: .58; }
+
+.hm-head { display: flex; align-items: center; gap: 9px; }
+.hm-ico { width: 30px; height: 30px; flex: 0 0 auto; border-radius: 9px; display: grid;
+  place-items: center; background: var(--accent-soft); color: var(--accent); }
+.hm-title { min-width: 0; flex: 1; }
+.hm-title b { font-size: 13.2px; display: block; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.hm-title small { display: block; font-size: 11.4px; color: var(--text-3); margin-top: 2px;
+  font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+
+.hm-chs { display: flex; flex-direction: column; gap: 6px; }
+.hm-ch { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 9px;
+  background: var(--surface-2); }
+.hm-ch-main { min-width: 0; flex: 1; }
+.hm-ch-main b { font-size: 12.6px; display: block; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.hm-ch-main small { font-size: 10.8px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.hm-none { font-size: 12px; color: var(--text-3); padding: 6px 2px; }
+
+/* 开关：整个是一颗药丸，点哪都行 */
+.hm-sw { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 9px 4px 4px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--surface-3); color: var(--text-3); cursor: pointer;
+  font-size: 11.6px; font-weight: 560; transition: background .15s, color .15s, border-color .15s; }
+.hm-sw i { width: 20px; height: 20px; border-radius: 50%; background: var(--surface-solid);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .18); transition: transform .16s ease, background .15s; }
+.hm-sw.on { background: var(--ok); border-color: var(--ok); color: #fff; }
+.hm-sw.on i { transform: translateX(0); background: #fff; }
+.hm-sw.wait { opacity: .55; pointer-events: none; }
+.hm-sw:hover { border-color: var(--accent); }
+
+.hm-foot { display: flex; justify-content: space-between; gap: 8px; font-size: 11px;
+  color: var(--text-3); font-variant-numeric: tabular-nums; }
+.hm-dim { color: var(--text-3); }
+
+/* 窄屏：单列，卡片大一点好按 */
+@media (max-width: 640px) {
+  .hm-list { grid-template-columns: 1fr; }
+  .hm-add .hm-key { flex: 1 1 100%; }
+  .hm-sw { padding: 6px 12px 6px 6px; }
+  .hm-sw i { width: 22px; height: 22px; }
+}

@@ -343,6 +343,76 @@ UDP 组播到 `239.255.77.87:8788`，每 5 秒一条 JSON。每张网卡各发�
 
 ---
 
+## 家电（ESP32）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/esp/devices` | 设备列表 + 在线状态。`?ping=0` 不探活（快，但可能是旧状态） |
+| POST | `/api/esp/scan` | 主动搜一轮（组播+广播各发 3 遍），返回 `found/new` 和最新列表 |
+| POST | `/api/esp/add` | 手动添加：`{"host","port","key","name"}`，直接问设备要身份 |
+| POST | `/api/esp/forget` | `{"id"}` 从注册表删掉（设备还在网上，下次喊话又会回来） |
+| POST | `/api/esp/rename` | `{"id","name"}` 改显示名（存在本机，不改固件） |
+| GET | `/api/esp/state?id=` | 读某一台的实时状态 |
+| POST | `/api/esp/control` | `{"id","channel","on"}` / `{"id","channel","toggle":true}` / `{"id","action":"..."}` |
+
+`GET /api/esp/devices` 的返回：
+
+```json
+{"ok": true, "data": {
+  "devices": [{
+    "id": "esp32-a1b2", "name": "客厅灯", "alias": "", "host": "192.168.1.66",
+    "port": 80, "model": "esp32", "fw": "1.0", "caps": ["relay", "sensor"],
+    "channels": [{"id": "r1", "name": "灯", "type": "relay"}],
+    "online": true, "last_seen": 1793925825, "source": "udp"
+  }],
+  "count": 1, "online": 1,
+  "listening": true, "error": "", "udp_port": 8789, "seen_packets": 128
+}}
+```
+
+几个刻意的取舍：
+
+- **在线判断不会每秒都打设备。** 结果缓存 6 秒（`PROBE_TTL`），
+  否则一个 10 台设备的家庭每开一次面板就是 10 个 HTTP 请求。
+- **设备回 401 也算在线。** 设了密钥但本机还没配密钥时，设备是活的、只是不让进；
+  判成「离线」会让用户以为没通电。
+- **`last_seen` 会被「能连上」刷新，不只看喊话。** 组播丢了但 HTTP 通，设备仍然算在线。
+- **设备列表按「在线优先 + 名字」排序**，离线的不占用视线。
+
+设备侧的协议（固件要实现的三个接口）见 [ESP32.md](ESP32.md#六协议想自己写固件的话)。
+
+---
+
+## 语音
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/voice/status` | 当前后端、能不能用、为什么、唤醒词 |
+| POST | `/api/voice/asr` | `{"wav": "<base64>"}`，16k 单声道 16 位 PCM WAV |
+
+```json
+{"ok": true, "data": {
+  "backend": "sherpa", "ready": true, "local": true,
+  "hint": "本地识别，音频不出这台机器",
+  "wake": "饺子", "always_listen": false
+}}
+```
+
+`backend` 取值与判定顺序：
+
+| 值 | 条件 |
+|---|---|
+| `sherpa` | `voice.model_dir` 指向的目录里有 `tokens.txt` + `model.onnx`，且装了 `sherpa-onnx` |
+| `http` | 配了 `voice.base_url`（任何 OpenAI 兼容的 `/v1/audio/transcriptions`） |
+| `mock` | 环境变量 `JIAOZI_VOICE_MOCK=1`（**只有测试会设**） |
+| `none` | 都没有 → 前端不显示麦克风按钮 |
+
+音频用 base64 放在 JSON 里，和 `/api/fs/upload` 同一套约定，
+不新增第二个请求体格式。解析失败、位深不对、超过 120 秒都会明确报错，
+**不会返回空字符串冒充「没听清」**。
+
+---
+
 ## 桌面操作（给外部程序用）
 
 ```bash

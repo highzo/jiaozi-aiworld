@@ -474,6 +474,28 @@ body.ai-open #toasts { right: 404px; }
 .ai-send:active { transform: scale(.94); }
 .ai-send:disabled { opacity: .4; }
 .ai-send svg { width: 15px; height: 15px; }
+
+/* 麦克风：和发送按钮同尺寸，录音时变红并呼吸 */
+.ai-mic {
+  width: 30px; height: 30px; border-radius: 9px; flex: 0 0 auto;
+  display: grid; place-items: center; color: var(--text-2);
+  background: var(--surface-3); border: 1px solid var(--line);
+  transition: background .15s, color .15s, transform .1s;
+}
+.ai-mic:hover { color: var(--accent); border-color: var(--accent); }
+.ai-mic:active { transform: scale(.94); }
+.ai-mic svg { width: 15px; height: 15px; }
+.ai-mic[hidden] { display: none; }
+.ai-mic.on { background: var(--err); border-color: var(--err); color: #fff;
+  animation: micPulse 1.4s ease-in-out infinite; }
+.ai-mic.always { box-shadow: 0 0 0 2px var(--accent-soft); }
+@keyframes micPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 60, 60, .45); }
+  50% { box-shadow: 0 0 0 6px rgba(220, 60, 60, 0); }
+}
+.ai-voice-hint { padding: 4px 4px 0; font-size: 11px; color: var(--text-3); line-height: 1.5; }
+.ai-voice-hint.warn { color: var(--warn); }
+.ai-voice-hint.err { color: var(--err); }
 .ai-hint { display: flex; gap: 6px; padding: 6px 4px 0; font-size: 11px; color: var(--text-3); }
 .ai-hint .dot-sep { opacity: .5; }
 .ai-hint.busy #aiStatus { color: var(--accent); }

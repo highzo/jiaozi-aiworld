@@ -19,6 +19,7 @@
       const llm = cfg.llm || {}, agent = cfg.agent || {}, ui = cfg.ui || {}, fs = cfg.fs || {};
       const img = cfg.image || {};
       const peer = cfg.peer || {};
+      const voiceCfg = cfg.voice || {};
       const hostname = (cfg._meta || {}).hostname || '';
       const langCfg = ui.language || 'auto';
 
@@ -28,6 +29,7 @@
         ['agent', 'bot', '智能体'],
         ['ui', 'eye', '外观'],
         ['lang', 'globe', '语言'],
+        ['voice', 'mic', '语音'],
         ['fs', 'hard-drive', '沙箱'],
         ['peer', 'wifi', '设备互联'],
         ['about', 'info', '关于'],
@@ -190,6 +192,30 @@
               <p class="set-desc" style="margin-top:14px">${esc(t('配对不需要密码，也不需要记 IP：在对方那台点「生成配对码」，在这台输入 6 位数字即可。码一次性、5 分钟过期、试错 6 次作废。'))}</p>
             </div>
 
+            <!-- 语音 -->
+            <div data-pane="voice" hidden>
+              <h3 class="set-h">${esc(t('语音'))}</h3>
+              <p class="set-desc">${esc(t('装了识别后端，AI 输入框旁边才会出现麦克风。音频在你按住说话时就地编码成 WAV，只发给下面这个后端。'))}</p>
+              <div class="lang-now" data-role="voiceNow"></div>
+              <div class="set-field" style="margin-top:12px"><label class="hint">${esc(t('本地识别模型目录（sherpa-onnx）'))}</label>
+                <input class="input" data-f="voice_model_dir" value="${esc(voiceCfg.model_dir || '')}" placeholder="~/models/sense-voice">
+                <small class="hint">${esc(t('放 tokens.txt 和 model.onnx 的目录。填了它就优先本地识别，录音不出这台机器。'))}</small></div>
+              <div class="set-field"><label class="hint">${esc(t('或者：远程转写接口'))}</label>
+                <input class="input" data-f="voice_base_url" value="${esc(voiceCfg.base_url || '')}" placeholder="http://127.0.0.1:8080/v1"></div>
+              <div class="set-grid2">
+                <div class="set-field"><label class="hint">${esc(t('模型名'))}</label>
+                  <input class="input" data-f="voice_model" value="${esc(voiceCfg.model || 'whisper-1')}" placeholder="whisper-1"></div>
+                <div class="set-field"><label class="hint">${esc(t('API Key（本机留空）'))}</label>
+                  <input class="input" data-f="voice_api_key" type="password" value="" placeholder="${esc(voiceCfg.api_key_set ? t('已设置，留空则不修改') : 'sk-...')}"></div>
+              </div>
+              <div class="set-field"><label class="hint">${esc(t('唤醒词'))}</label>
+                <input class="input" data-f="voice_wake" value="${esc(voiceCfg.wake || '饺子')}" placeholder="饺子">
+                <small class="hint">${esc(t('打开「一直听」时，只有说到这个词开头的句子才会被执行，其他当闲聊丢掉。'))}</small></div>
+              <div class="set-row"><div class="sr-l"><b>${esc(t('打开 AI 面板时默认一直听'))}</b>
+                <small>${esc(t('关掉的话就是点一下说一句。一直听会持续占用麦克风，手机上比较费电。'))}</small></div>
+                <div class="sr-r"><label class="switch"><input type="checkbox" data-f="voice_always" ${voiceCfg.always_listen ? 'checked' : ''}><i></i></label></div></div>
+            </div>
+
             <!-- 关于 -->
             <div data-pane="about" hidden>
               <h3 class="set-h">${esc(t('关于'))}</h3>
@@ -211,6 +237,27 @@
       let wallpaper = ui.wallpaper || 'aurora';
       let roots = (JZ.state.roots || []).map(function (r) { return r.path; });
       let extraRoots = [];
+
+      /* 语音面板顶部那块「现在用的是哪个后端」——把判断依据摆出来，
+         而不是让人配了半天还不知道到底生效没。 */
+      async function renderVoiceNow() {
+        const el = q('voiceNow');
+        if (!el) return;
+        el.innerHTML = `<b>${esc(t('检测中…'))}</b>`;
+        try {
+          const r = await JZ.api.get('/api/voice/status');
+          const s = r.data || r;
+          const name = { sherpa: t('本地识别'), http: t('远程转写'),
+                         mock: t('模拟'), none: t('不可用') }[s.backend] || s.backend;
+          el.innerHTML = `<b>${esc(s.ready ? t('麦克风可用') : t('麦克风不可用'))} · ${esc(name)}</b>` +
+            `<span>${esc(s.hint || '')}</span>` +
+            (s.ready ? `<small>${esc(t('唤醒词：{w}', { w: s.wake || '饺子' }))}</small>` : '');
+        } catch (e) {
+          el.innerHTML = `<b>${esc(t('读不到状态'))}</b>` +
+            `<span>${esc(String((e && e.message) || e))}</span>`;
+        }
+      }
+      renderVoiceNow();
 
       root.querySelectorAll('.set-nav').forEach(function (b) {
         b.onclick = function () {
@@ -399,14 +446,24 @@
             save_dir: g('img_save_dir').value.trim(),
             enabled: g('img_enabled').checked,
           },
+          voice: {
+            model_dir: g('voice_model_dir').value.trim(),
+            base_url: g('voice_base_url').value.trim(),
+            model: g('voice_model').value.trim(),
+            wake: g('voice_wake').value.trim() || '饺子',
+            always_listen: g('voice_always').checked,
+          },
         };
         const key = g('api_key').value.trim();
         if (key) patch.llm.api_key = key;
         const ikey = g('img_api_key').value.trim();
         if (ikey) patch.image.api_key = ikey;
+        const vkey = g('voice_api_key').value.trim();
+        if (vkey) patch.voice.api_key = vkey;
         try {
           const saved = await JZ.api.post('/api/config', patch);
           JZ.state.config = saved;
+          renderVoiceNow();
           q('saveState').textContent = t('已保存');
           q('saveState').className = 'tag ok';
           JZ.toast(t('设置已保存'), t('新的参数立即生效'), 'ok');

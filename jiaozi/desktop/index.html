@@ -75,9 +75,11 @@
   <footer class="ai-foot">
     <div class="ai-input-wrap">
       <textarea id="aiInput" rows="1" placeholder="让饺子做点什么…（Enter 发送，Shift+Enter 换行）" data-i18n-ph="让饺子做点什么…（Enter 发送，Shift+Enter 换行）"></textarea>
+      <button id="aiMic" class="ai-mic" data-icon="mic" title="按住说话" data-i18n-title="按住说话" hidden></button>
       <button id="aiSend" class="ai-send" data-icon="send" title="发送" data-i18n-title="发送"></button>
     </div>
     <div class="ai-hint"><span id="aiStatus" data-i18n="就绪">就绪</span><span class="dot-sep">·</span><span id="aiSteps"></span></div>
+    <div id="aiHintVoice" class="ai-voice-hint" hidden></div>
   </footer>
 </aside>
 
@@ -128,12 +130,14 @@
 <script src="js/core.js"></script>
 <script src="js/i18n.js"></script>
 <script src="js/vt.js"></script>
+<script src="js/voice.js"></script>
 <script src="js/wm.js"></script>
 <script src="js/apps/files.js"></script>
 <script src="js/apps/editor.js"></script>
 <script src="js/apps/terminal.js"></script>
 <script src="js/apps/monitor.js"></script>
 <script src="js/apps/devices.js"></script>
+<script src="js/apps/home.js"></script>
 <script src="js/apps/settings.js"></script>
 <script src="js/apps/viewer.js"></script>
 <script src="js/agent.js"></script>

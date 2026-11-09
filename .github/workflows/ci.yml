@@ -78,6 +78,9 @@ jobs:
       - name: 局域网互认（两个真实进程）
         run: python tests/peer_test.py
 
+      - name: 家电与语音（真起服务 + 两台假 ESP32）
+        run: python tests/devices_test.py
+
       - name: 失败时打印服务端日志
         if: failure()
         run: tail -120 /tmp/jiaozi.log

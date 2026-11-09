@@ -108,6 +108,29 @@ DEFAULTS: dict = {
         #: 组播端口，和 HTTP 端口错开
         "udp_port": 8788,
     },
+    "esp": {
+        #: 家电：ESP32 这类小设备。关掉就不监听发现端口
+        "enabled": True,
+        #: 发现端口，和互认的 8788 错开
+        "udp_port": 8789,
+        #: 新设备加进来时是否自动允许 AI 控制（不建议默认全开，见 docs/ESP32.md）
+        "ai_control": True,
+    },
+    "voice": {
+        #: 语音输入。留空 model_dir 且留空 base_url 就不启用麦克风
+        #: 本地：sherpa-onnx 模型目录（含 tokens.txt + model.onnx）
+        "model_dir": "",
+        #: 远端：OpenAI 兼容的 /v1/audio/transcriptions
+        "base_url": "",
+        "api_key": "",
+        "model": "whisper-1",
+        #: 识别语言，留空让识别器自己判
+        "lang": "",
+        #: 唤醒词：说这个词开头才算下命令，避免把闲聊当指令
+        "wake": "饺子",
+        #: 打开语音时是否默认进入「一直听」
+        "always_listen": False,
+    },
 }
 
 
@@ -193,6 +216,9 @@ def public_view(cfg: dict | None = None) -> dict:
     ikey = cfg["image"].get("api_key") or ""
     cfg["image"]["api_key_set"] = bool(ikey)
     cfg["image"]["api_key"] = ("*" * 8) if ikey else ""
+    vkey = (cfg.get("voice") or {}).get("api_key") or ""
+    cfg["voice"]["api_key_set"] = bool(vkey)
+    cfg["voice"]["api_key"] = ("*" * 8) if vkey else ""
     cfg["_meta"] = {
         "version": VERSION,
         "name": APP_NAME,

@@ -555,6 +555,71 @@ def main() -> int:
            "body:JSON.stringify({lang:'auto'})})")
         js("JZ.i18n.useAuto()")
         time.sleep(2.0)
+        # ----------------------------------------------------------
+        # 家电与语音。这两块都是"接口通了但界面没接上"的高发区，
+        # 所以断言必须落到真的有卡片、真的有按钮上。
+        print("\n[UI-9] 家电与语音")
+        js("JZ.WM.open('home')")
+        time.sleep(2.0)
+        ok("家电应用能打开", js("!!document.querySelector('.hm')") is True)
+        ok("家电面板有标题栏按钮",
+           (js("document.querySelectorAll('.hm-list, .hm-add').length") or 0) >= 1)
+
+        ncard = js("document.querySelectorAll('.hm-card').length") or 0
+        nempty = js("(document.querySelector('.hm-list .empty')||{}).childElementCount") or 0
+        ok("列表要么有设备卡、要么有明确空状态", ncard > 0 or nempty > 0,
+           f"cards={ncard} empty={nempty}")
+        if ncard:
+            ok("设备卡上有开关", (js("document.querySelectorAll('.hm-sw').length") or 0) > 0)
+            ok("设备卡显示地址",
+               bool(js("(document.querySelector('.hm-title small')||{}).textContent")))
+
+        # 手动添加是发现不到时的唯一退路，折叠着也必须能展开
+        ok("手动添加默认收起", js("(document.querySelector('[data-role=\\'add\\']')||{}).hidden") is True)
+        js("(function(){var b=document.querySelector('[data-act=\\'add-toggle\\']');"
+           "if(b)b.click();return !!b;})()")
+        time.sleep(0.4)
+        ok("点了就展开", js("(document.querySelector('[data-role=\\'add\\']')||{}).hidden") is False)
+        ok("有 IP 和密钥两个输入框",
+           (js("document.querySelectorAll('.hm-add .input').length") or 0) >= 2)
+        shot("14-home.png")
+
+        # 语音：后端没配时按钮必须是隐藏的。显示一个按了没反应的麦克风
+        # 比不显示更糟——用户会以为是自己说话太小声。
+        vst = js("fetch('/api/voice/status').then(function(r){return r.json()})"
+                 ".then(function(j){return !!(j.data||j).ready})")
+        mic_hidden = js("!!document.getElementById('aiMic').hidden")
+        ok("没有识别后端时不显示麦克风", (vst is False) == bool(mic_hidden),
+           f"ready={vst} hidden={mic_hidden}")
+        ok("语音状态接口有说明文字",
+           bool(js("fetch('/api/voice/status').then(function(r){return r.json()})"
+                   ".then(function(j){return (j.data||j).hint||''})")))
+
+        # 设置页的每个页签都要真有内容。上一轮就是「设备互联」面板
+        # 因为 tab 列表写死时漏了一项，点开一片空白——这类 bug 只有
+        # 逐个点一遍才抓得到。
+        js("(function(){var w=null;JZ.WM.wins.forEach(function(x){"
+           "if(x.app&&x.app.id==='settings')w=x;});if(!w)JZ.WM.open('settings');return 1;})()")
+        time.sleep(1.2)
+        tabs = js("(function(){return [].slice.call(document.querySelectorAll('.set-nav'))"
+                  ".map(function(b){return b.dataset.tab;});})()") or []
+        ok("设置页签数量正常", len(tabs) >= 9, tabs)
+        bad = []
+        for tab in tabs:
+            js(f"(function(){{var b=document.querySelector('.set-nav[data-tab=\\'{tab}\\']');"
+               f"if(b)b.click();return !!b;}})()")
+            time.sleep(0.35)
+            r = js(f"(function(){{var p=document.querySelector('[data-pane=\\'{tab}\\']');"
+                   f"if(!p) return {{miss:true}};"
+                   f"return {{hidden:p.hidden, len:(p.innerText||'').trim().length}};}})()") or {}
+            if r.get("miss") or r.get("hidden") or (r.get("len") or 0) < 15:
+                bad.append(f"{tab}:{r}")
+        ok("每个设置页签点开都有内容（不是空白面板）", not bad, bad[:3])
+        ok("语音页有后端状态说明",
+           bool(js("(function(){var b=document.querySelector('.set-nav[data-tab=\\'voice\\']');"
+                   "if(b)b.click();return (document.querySelector('.lang-now')||{}).textContent;})()")))
+        shot("15-settings-voice.png")
+
     finally:
         if ws:
             ws.close()
